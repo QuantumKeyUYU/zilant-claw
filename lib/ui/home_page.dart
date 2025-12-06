@@ -195,13 +195,13 @@ class _HomePageState extends State<HomePage> {
         text = 'Дракон охраняет тебя. Защита включена.';
         break;
       case ProtectionState.turningOn:
-        text = 'Включаем защиту...';
+        text = 'Включаем защиту…';
         break;
       case ProtectionState.turningOff:
-        text = 'Выключаем защиту...';
+        text = 'Выключаем защиту…';
         break;
       case ProtectionState.error:
-        text = 'Ошибка. Не удалось включить защиту.';
+        text = 'Произошла ошибка. Защита не включена.';
         break;
       case ProtectionState.off:
       default:

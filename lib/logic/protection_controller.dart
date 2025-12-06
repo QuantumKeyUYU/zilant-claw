@@ -19,14 +19,24 @@ class ProtectionController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<void> toggleProtection() async {
-    if (_state == ProtectionState.off || _state == ProtectionState.error) {
-      await turnOnProtection();
-    } else if (_state == ProtectionState.on) {
-      await turnOffProtection();
+    switch (_state) {
+      case ProtectionState.off:
+      case ProtectionState.error:
+        await turnOnProtection();
+        break;
+      case ProtectionState.on:
+        await turnOffProtection();
+        break;
+      case ProtectionState.turningOn:
+      case ProtectionState.turningOff:
+        break;
     }
   }
 
   Future<void> turnOnProtection() async {
+    if (_state != ProtectionState.off && _state != ProtectionState.error) {
+      return;
+    }
     if (!Platform.isAndroid && !Platform.isWindows) {
       _setError('Платформа не поддерживается на этом этапе.');
       return;
@@ -47,6 +57,9 @@ class ProtectionController extends ChangeNotifier {
   }
 
   Future<void> turnOffProtection() async {
+    if (_state != ProtectionState.on) {
+      return;
+    }
     if (!Platform.isAndroid && !Platform.isWindows) {
       _setError('Платформа не поддерживается на этом этапе.');
       return;

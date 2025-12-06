@@ -2,6 +2,7 @@
 
 #include <flutter/standard_method_codec.h>
 #include <windows.h>
+#include <iostream>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -39,9 +40,11 @@ LRESULT FlutterWindow::MessageHandler(HWND window, UINT const message,
            std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
         if (call.method_name() == "windows_start_protection") {
           OutputDebugString(L"Windows protection ON (stub)\n");
+          std::cout << "Windows protection ON (stub)" << std::endl;
           result->Success();
         } else if (call.method_name() == "windows_stop_protection") {
           OutputDebugString(L"Windows protection OFF (stub)\n");
+          std::cout << "Windows protection OFF (stub)" << std::endl;
           result->Success();
         } else {
           result->NotImplemented();

@@ -3,6 +3,7 @@ package com.example.digital_defender
 import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
+import android.util.Log
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -31,20 +32,34 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun startVpn(result: MethodChannel.Result) {
+        if (pendingResult != null) {
+            result.error("pending", "VPN permission request is already in progress", null)
+            return
+        }
+
         val intent = VpnService.prepare(this)
         if (intent != null) {
             pendingResult = result
+            Log.i(TAG, "Requesting VPN permission")
             startActivityForResult(intent, vpnRequestCode)
             return
         }
-        startVpnService()
-        result.success(null)
+        try {
+            startVpnService()
+            result.success(null)
+        } catch (e: Exception) {
+            result.error("start_failed", "Failed to start VPN service: ${e.message}", null)
+        }
     }
 
     private fun stopVpn(result: MethodChannel.Result) {
-        val stopIntent = Intent(this, DigitalDefenderVpnService::class.java)
-        stopService(stopIntent)
-        result.success(null)
+        try {
+            val stopIntent = Intent(this, DigitalDefenderVpnService::class.java)
+            stopService(stopIntent)
+            result.success(null)
+        } catch (e: Exception) {
+            result.error("stop_failed", "Failed to stop VPN service: ${e.message}", null)
+        }
     }
 
     private fun startVpnService() {
@@ -56,12 +71,18 @@ class MainActivity : FlutterActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == vpnRequestCode) {
             if (resultCode == RESULT_OK) {
+                Log.i(TAG, "VPN permission granted")
                 startVpnService()
                 pendingResult?.success(null)
             } else {
+                Log.w(TAG, "VPN permission denied")
                 pendingResult?.error("denied", "VPN permission denied", null)
             }
             pendingResult = null
         }
+    }
+
+    companion object {
+        private const val TAG = "MainActivity"
     }
 }
