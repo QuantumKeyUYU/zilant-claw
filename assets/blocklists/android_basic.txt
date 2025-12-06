@@ -1,0 +1,5 @@
+google-analytics.com
+doubleclick.net
+facebook.com
+app-measurement.com
+tracking.example.com

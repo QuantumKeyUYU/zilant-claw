@@ -1,0 +1,18 @@
+name: digital_defender
+description: MVP for Digital Defender with dragon mascot and platform protection.
+version: 0.1.0
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+  flutter: '>=3.16.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/blocklists/android_basic.txt
