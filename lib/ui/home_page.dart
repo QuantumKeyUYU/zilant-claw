@@ -53,7 +53,8 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final state = widget.controller.state;
     final stats = widget.controller.stats;
-    final isOn = state == ProtectionState.on;
+    final isOn =
+        stats.isRunning || state == ProtectionState.on || state == ProtectionState.turningOn;
     final isBusy =
         state == ProtectionState.turningOn || state == ProtectionState.turningOff;
 
@@ -69,7 +70,7 @@ class _HomePageState extends State<HomePage> {
           children: [
             _buildProtectionCard(context, isOn, isBusy, state),
             const SizedBox(height: 16),
-            _buildStatsCard(context, stats.blockedCount),
+            _buildStatsCard(context, stats.blockedCount, stats.sessionBlocked),
             const SizedBox(height: 12),
             _buildStatsActions(context),
             const SizedBox(height: 24),
@@ -88,6 +89,39 @@ class _HomePageState extends State<HomePage> {
     bool isBusy,
     ProtectionState state,
   ) {
+    final errorMessage = widget.controller.errorMessage;
+    final needsPermission = widget.controller.errorCode == 'denied';
+
+    String title;
+    switch (state) {
+      case ProtectionState.turningOn:
+        title = AppStrings.protectionTurningOn;
+        break;
+      case ProtectionState.turningOff:
+        title = AppStrings.protectionTurningOff;
+        break;
+      case ProtectionState.error:
+        title = AppStrings.protectionUnknown;
+        break;
+      default:
+        title = isOn ? AppStrings.protectionEnabled : AppStrings.protectionDisabled;
+    }
+
+    String subtitle;
+    switch (state) {
+      case ProtectionState.turningOn:
+        subtitle = AppStrings.progressTurningOn;
+        break;
+      case ProtectionState.turningOff:
+        subtitle = AppStrings.progressTurningOff;
+        break;
+      case ProtectionState.error:
+        subtitle = errorMessage ?? AppStrings.progressError;
+        break;
+      default:
+        subtitle = isOn ? AppStrings.vpnActive : AppStrings.vpnInactive;
+    }
+
     return Card(
       color: Colors.blueGrey.shade900,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -103,7 +137,7 @@ class _HomePageState extends State<HomePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isOn ? AppStrings.protectionEnabled : AppStrings.protectionDisabled,
+                      title,
                       style: Theme.of(context)
                           .textTheme
                           .headlineSmall
@@ -111,7 +145,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      isOn ? AppStrings.vpnActive : AppStrings.vpnInactive,
+                      subtitle,
                       style: Theme.of(context)
                           .textTheme
                           .bodyMedium
@@ -123,7 +157,7 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     Switch.adaptive(
                       value: isOn,
-                      onChanged: (_) => _toggleProtection(),
+                      onChanged: isBusy ? null : (_) => _toggleProtection(),
                       activeColor: Colors.greenAccent,
                     ),
                     if (isBusy)
@@ -145,11 +179,30 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
             const SizedBox(height: 12),
-            if (state == ProtectionState.error &&
-                widget.controller.errorMessage != null)
-              Text(
-                widget.controller.errorMessage!,
-                style: const TextStyle(color: Colors.redAccent),
+            if (state == ProtectionState.error && errorMessage != null)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    errorMessage,
+                    style: const TextStyle(color: Colors.redAccent),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      if (needsPermission)
+                        ElevatedButton(
+                          onPressed: _toggleProtection,
+                          child: const Text(AppStrings.grantVpnPermission),
+                        ),
+                      if (!needsPermission)
+                        ElevatedButton(
+                          onPressed: _toggleProtection,
+                          child: const Text(AppStrings.retryStart),
+                        ),
+                    ],
+                  ),
+                ],
               ),
           ],
         ),
@@ -157,40 +210,65 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildStatsCard(BuildContext context, int blockedCount) {
+  Widget _buildStatsCard(
+      BuildContext context, int blockedCount, int sessionBlocked) {
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Row(
+        child: Column(
           children: [
-            const Icon(Icons.shield, color: Colors.green),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    AppStrings.totalBlocked,
-                    style: Theme.of(context).textTheme.titleMedium,
+            Row(
+              children: [
+                const Icon(Icons.shield, color: Colors.green),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        AppStrings.totalBlocked,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$blockedCount',
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '$blockedCount',
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineMedium
-                        ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                if (_isRefreshing)
+                  const SizedBox(
+                    height: 28,
+                    width: 28,
+                    child: CircularProgressIndicator(strokeWidth: 3),
                   ),
-                ],
-              ),
+              ],
             ),
-            if (_isRefreshing)
-              const SizedBox(
-                height: 28,
-                width: 28,
-                child: CircularProgressIndicator(strokeWidth: 3),
-              ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.schedule, color: Colors.blueGrey),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(AppStrings.sessionBlocked,
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 4),
+                    Text('$sessionBlocked',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                  ],
+                )
+              ],
+            ),
           ],
         ),
       ),
@@ -223,7 +301,7 @@ class _HomePageState extends State<HomePage> {
     final error = widget.controller.statsError;
     if (error != null) {
       return Text(
-        error,
+        '${AppStrings.statsError}\n$error',
         style: const TextStyle(color: Colors.redAccent),
       );
     }

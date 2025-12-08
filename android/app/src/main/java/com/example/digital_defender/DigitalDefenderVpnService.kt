@@ -31,6 +31,7 @@ class DigitalDefenderVpnService : VpnService() {
     private val blocklist = DomainBlocklist
     private lateinit var preferences: SharedPreferences
     private var blockedCount: Long = 0
+    private var sessionBlockedCount: Long = 0
     private val upstreamServers = listOf(
         InetSocketAddress("1.1.1.1", 53),
         InetSocketAddress("8.8.8.8", 53)
@@ -43,6 +44,7 @@ class DigitalDefenderVpnService : VpnService() {
         blocklist.init(this)
         maybeRefreshBlocklist()
         blockedCount = readBlockedCount(this)
+        sessionBlockedCount = DigitalDefenderStats.readSessionBlockedCount(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -76,6 +78,7 @@ class DigitalDefenderVpnService : VpnService() {
     override fun onDestroy() {
         Log.d(TAG, "onDestroy")
         stopProtection()
+        setProtectionEnabled(false)
         super.onDestroy()
     }
 
@@ -121,15 +124,19 @@ class DigitalDefenderVpnService : VpnService() {
             vpnInterface = builder.establish()
             if (vpnInterface == null) {
                 Log.e(TAG, "Failed to establish VPN interface")
+                setProtectionEnabled(false)
                 stopSelf()
             } else {
                 Log.d(TAG, "VPN interface established")
+                resetSessionCounters()
                 startWorker(vpnInterface!!)
+                setProtectionEnabled(true)
                 Log.i(TAG, "VPN started")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error starting VPN", e)
             stopProtection()
+            setProtectionEnabled(false)
             stopSelf()
         }
     }
@@ -153,11 +160,14 @@ class DigitalDefenderVpnService : VpnService() {
             workerThread?.join(500)
             workerThread = null
             vpnInterface?.close()
+            stopForeground(true)
         } catch (e: Exception) {
             Log.w(TAG, "Error closing VPN interface", e)
         } finally {
             worker = null
             vpnInterface = null
+            resetSessionCounters()
+            setProtectionEnabled(false)
         }
     }
 
@@ -218,6 +228,17 @@ class DigitalDefenderVpnService : VpnService() {
                 output.close()
             } catch (e: Exception) {
                 Log.w(TAG, "Error closing output", e)
+            }
+            try {
+                tunInterface.close()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error closing tun interface", e)
+            }
+
+            if (running) {
+                Log.w(TAG, "Worker stopped unexpectedly; requesting service shutdown")
+                running = false
+                this@DigitalDefenderVpnService.stopSelf()
             }
         }
 
@@ -451,10 +472,12 @@ class DigitalDefenderVpnService : VpnService() {
         private const val DEBUG_DNS = false
         internal const val PREFS_NAME = "digital_defender_prefs"
         internal const val KEY_BLOCKED_COUNT = "blocked_count"
+        internal const val KEY_SESSION_BLOCKED_COUNT = "session_blocked_count"
         private const val KEY_LAST_BLOCKLIST_UPDATE = "last_blocklist_update"
         internal const val KEY_RECENT_BLOCKS = "recent_blocks"
+        internal const val KEY_PROTECTION_ENABLED = "protection_enabled"
         private const val BLOCKLIST_URL = "https://example.com/digital-defender/blocklist.txt" // TODO: replace with real URL
-        private const val BLOCKLIST_REFRESH_INTERVAL_MS = 60 * 60 * 1000L
+        private const val BLOCKLIST_REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000L
         const val ACTION_STOP = "com.example.digital_defender.STOP"
 
         fun readBlockedCount(context: Context): Long {
@@ -464,8 +487,19 @@ class DigitalDefenderVpnService : VpnService() {
 
     @Synchronized
     private fun recordBlockedDomain(domain: String) {
-        blockedCount = DigitalDefenderStats.recordBlock(this, domain)
+        val update = DigitalDefenderStats.recordBlock(this, domain)
+        blockedCount = update.blockedTotal
+        sessionBlockedCount = update.sessionBlocked
         Log.i(TAG, "Blocked domain: $domain")
+    }
+
+    private fun resetSessionCounters() {
+        sessionBlockedCount = 0
+        DigitalDefenderStats.resetSessionCount(this)
+    }
+
+    private fun setProtectionEnabled(enabled: Boolean) {
+        preferences.edit().putBoolean(KEY_PROTECTION_ENABLED, enabled).apply()
     }
 
     private fun maybeRefreshBlocklist() {
@@ -477,8 +511,14 @@ class DigitalDefenderVpnService : VpnService() {
         }
 
         thread(name = "BlocklistRefresh", start = true) {
-            blocklist.refreshFromNetwork(this, BLOCKLIST_URL)
-            preferences.edit().putLong(KEY_LAST_BLOCKLIST_UPDATE, System.currentTimeMillis()).apply()
+            val succeeded = blocklist.refreshFromNetwork(this, BLOCKLIST_URL)
+            val timestamp = System.currentTimeMillis()
+            preferences.edit().putLong(KEY_LAST_BLOCKLIST_UPDATE, timestamp).apply()
+            if (succeeded) {
+                Log.i(TAG, "Blocklist refreshed from $BLOCKLIST_URL at $timestamp")
+            } else {
+                Log.w(TAG, "Blocklist refresh from $BLOCKLIST_URL failed at $timestamp; using existing list")
+            }
         }
     }
 }
@@ -496,10 +536,25 @@ object DigitalDefenderStats {
             .getLong(DigitalDefenderVpnService.KEY_BLOCKED_COUNT, 0L)
     }
 
+    fun readSessionBlockedCount(context: Context): Long {
+        return context.getSharedPreferences(DigitalDefenderVpnService.PREFS_NAME, Context.MODE_PRIVATE)
+            .getLong(DigitalDefenderVpnService.KEY_SESSION_BLOCKED_COUNT, 0L)
+    }
+
+    fun resetSessionCount(context: Context) {
+        context.getSharedPreferences(DigitalDefenderVpnService.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(DigitalDefenderVpnService.KEY_SESSION_BLOCKED_COUNT, 0L)
+            .apply()
+    }
+
+    data class StatsUpdate(val blockedTotal: Long, val sessionBlocked: Long)
+
     @Synchronized
-    fun recordBlock(context: Context, domain: String): Long {
+    fun recordBlock(context: Context, domain: String): StatsUpdate {
         val prefs = context.getSharedPreferences(DigitalDefenderVpnService.PREFS_NAME, Context.MODE_PRIVATE)
         val updatedCount = prefs.getLong(DigitalDefenderVpnService.KEY_BLOCKED_COUNT, 0L) + 1
+        val updatedSession = prefs.getLong(DigitalDefenderVpnService.KEY_SESSION_BLOCKED_COUNT, 0L) + 1
         val recent = loadRecent(prefs).apply {
             add(BlockedEntry(domain, System.currentTimeMillis()))
             if (size > MAX_RECENT) {
@@ -507,15 +562,20 @@ object DigitalDefenderStats {
             }
         }
 
-        saveRecent(prefs, recent)
-        prefs.edit().putLong(DigitalDefenderVpnService.KEY_BLOCKED_COUNT, updatedCount).apply()
-        return updatedCount
+        val editor = prefs.edit()
+        editor.putLong(DigitalDefenderVpnService.KEY_BLOCKED_COUNT, updatedCount)
+        editor.putLong(DigitalDefenderVpnService.KEY_SESSION_BLOCKED_COUNT, updatedSession)
+        editor.putString(DigitalDefenderVpnService.KEY_RECENT_BLOCKS, serializeRecent(recent))
+        editor.apply()
+        return StatsUpdate(updatedCount, updatedSession)
     }
 
     @Synchronized
     fun getStatsJson(context: Context): String {
         val prefs = context.getSharedPreferences(DigitalDefenderVpnService.PREFS_NAME, Context.MODE_PRIVATE)
         val blockedCount = prefs.getLong(DigitalDefenderVpnService.KEY_BLOCKED_COUNT, 0L)
+        val sessionBlocked = prefs.getLong(DigitalDefenderVpnService.KEY_SESSION_BLOCKED_COUNT, 0L)
+        val protectionEnabled = prefs.getBoolean(DigitalDefenderVpnService.KEY_PROTECTION_ENABLED, false)
         val recent = loadRecent(prefs)
 
         val recentArray = JSONArray()
@@ -528,6 +588,8 @@ object DigitalDefenderStats {
 
         val root = JSONObject()
         root.put("blockedCount", blockedCount)
+        root.put("sessionBlocked", sessionBlocked)
+        root.put("running", protectionEnabled)
         root.put("recent", recentArray)
         return root.toString()
     }
@@ -537,6 +599,7 @@ object DigitalDefenderStats {
         val prefs = context.getSharedPreferences(DigitalDefenderVpnService.PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit()
             .putLong(DigitalDefenderVpnService.KEY_BLOCKED_COUNT, 0L)
+            .putLong(DigitalDefenderVpnService.KEY_SESSION_BLOCKED_COUNT, 0L)
             .putString(DigitalDefenderVpnService.KEY_RECENT_BLOCKS, JSONArray().toString())
             .apply()
     }
@@ -560,7 +623,7 @@ object DigitalDefenderStats {
         }
     }
 
-    private fun saveRecent(prefs: SharedPreferences, entries: List<BlockedEntry>) {
+    private fun serializeRecent(entries: List<BlockedEntry>): String {
         val array = JSONArray()
         entries.forEach { entry ->
             val obj = JSONObject()
@@ -568,6 +631,6 @@ object DigitalDefenderStats {
             obj.put("timestamp", entry.timestamp)
             array.put(obj)
         }
-        prefs.edit().putString(DigitalDefenderVpnService.KEY_RECENT_BLOCKS, array.toString()).apply()
+        return array.toString()
     }
 }
