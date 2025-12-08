@@ -30,6 +30,11 @@ class AppStrings {
   static const String protectionUnknown = 'Статус защиты неизвестен';
   static const String vpnActive = 'VPN активен';
   static const String vpnInactive = 'VPN не запущен';
+  static const String protectionHintOn =
+      'Мы блокируем трекеры и лишнюю аналитику из списка.';
+  static const String protectionHintOff = 'Трафик идёт напрямую — без фильтра.';
+  static const String protectionFailOpenWarning =
+      'Фильтр временно ослаблен — DNS не отвечает, чтобы не ломать интернет мы пропускаем трафик без блокировки.';
   static const String blockedCompact = 'Заблокировано: %s за сеанс / %s всего';
   static const String refreshStats = 'Обновить данные';
   static const String resetStats = 'Сбросить статистику';
@@ -50,7 +55,20 @@ class AppStrings {
   static const String protectionModeStandard = 'Стандарт';
   static const String protectionModeStrict = 'Жёсткий';
   static const String protectionModeChanged = 'Режим защиты: %s';
+  static const String protectionModeHintLight =
+      'Режет только трекеры и аналитику, почти ничего не ломает';
+  static const String protectionModeHintStandard =
+      'Баланс защиты и стабильности, блокирует рекламу и трекеры';
+  static const String protectionModeHintStrict =
+      'Максимальная защита: агрессивные блокировки, сайты и приложения могут работать некорректно';
   static const String modeStatus = 'Режим: %s';
+  static const String filterStatusActive = 'Фильтр активен';
+  static const String filterStatusFailOpen =
+      'Фильтр временно отключён (DNS-проблема)';
   static const String totalLabel = 'Всего';
   static const String sessionLabel = 'За сеанс';
+  static const String clearRecent = 'Очистить список';
+  static const String statsHeaderTitle = 'Статистика и домены';
+  static const String recentEmpty =
+      'Пока ничего не заблокировано — вы в чистом интернете 😌';
 }

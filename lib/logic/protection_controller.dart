@@ -173,6 +173,28 @@ class ProtectionController extends ChangeNotifier {
     }
   }
 
+  Future<void> clearRecentBlocks() async {
+    if (!Platform.isAndroid) {
+      _stats = ProtectionStats(
+        blockedCount: _stats.blockedCount,
+        sessionBlocked: _stats.sessionBlocked,
+        recent: const [],
+        isRunning: _stats.isRunning,
+        mode: _stats.mode,
+        failOpenActive: _stats.failOpenActive,
+      );
+      notifyListeners();
+      return;
+    }
+    try {
+      await _statsChannel.invokeMethod('clearRecent');
+      await refreshStats();
+    } catch (e) {
+      _statsError = 'Не удалось очистить список доменов. Попробуйте ещё раз.';
+      notifyListeners();
+    }
+  }
+
   void _updateState(ProtectionState newState) {
     _state = newState;
     _errorMessage = null;
@@ -250,6 +272,7 @@ class ProtectionStats {
     required this.recent,
     required this.isRunning,
     required this.mode,
+    required this.failOpenActive,
   });
 
   final int blockedCount;
@@ -257,6 +280,7 @@ class ProtectionStats {
   final List<BlockedEntry> recent;
   final bool isRunning;
   final ProtectionMode mode;
+  final bool failOpenActive;
 
   factory ProtectionStats.empty() => const ProtectionStats(
         blockedCount: 0,
@@ -264,6 +288,7 @@ class ProtectionStats {
         recent: [],
         isRunning: false,
         mode: ProtectionMode.standard,
+        failOpenActive: false,
       );
 
   factory ProtectionStats.fromJson(Map<String, dynamic> json) {
@@ -294,6 +319,9 @@ class ProtectionStats {
     final runningRaw = json['running'];
     final isRunning = runningRaw is bool ? runningRaw : false;
 
+    final failOpenRaw = json['failOpenActive'];
+    final failOpenActive = failOpenRaw is bool ? failOpenRaw : false;
+
     final modeRaw = json['mode'];
     final parsedMode = modeRaw is String
         ? () {
@@ -314,6 +342,7 @@ class ProtectionStats {
       recent: recentEntries,
       isRunning: isRunning,
       mode: parsedMode,
+      failOpenActive: failOpenActive,
     );
   }
 }

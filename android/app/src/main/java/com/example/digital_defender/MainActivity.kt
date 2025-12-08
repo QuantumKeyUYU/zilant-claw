@@ -41,6 +41,7 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "getStats" -> getStats(result)
                     "resetStats" -> resetStats(result)
+                    "clearRecent" -> clearRecent(result)
                     else -> result.notImplemented()
                 }
             }
@@ -170,6 +171,16 @@ class MainActivity : FlutterActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to reset stats", e)
             result.error("reset_failed", "Failed to reset stats: ${e.message}", null)
+        }
+    }
+
+    private fun clearRecent(result: MethodChannel.Result) {
+        try {
+            DigitalDefenderStats.clearRecent(this)
+            result.success(null)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear recent stats", e)
+            result.error("clear_recent_failed", "Failed to clear recent stats: ${e.message}", null)
         }
     }
 
