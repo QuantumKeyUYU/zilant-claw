@@ -282,6 +282,31 @@ class ProtectionStats {
   final ProtectionMode mode;
   final bool failOpenActive;
 
+  // --- ИСПРАВЛЕНИЯ: Геттеры для совместимости с вашим UI ---
+  
+  // UI ожидает vpnActive вместо isRunning
+  bool get vpnActive => isRunning; 
+  
+  // UI ожидает totalBlocked вместо blockedCount
+  int get totalBlocked => blockedCount; 
+  
+  // UI ожидает recentDomains вместо recent
+  List<BlockedEntry> get recentDomains => recent; 
+  
+  // UI ожидает строковое название режима
+  String get modeName {
+    switch (mode) {
+      case ProtectionMode.light:
+        return 'Light';
+      case ProtectionMode.strict:
+        return 'Strict';
+      case ProtectionMode.standard:
+      default:
+        return 'Standard';
+    }
+  }
+  // ---------------------------------------------------------
+
   factory ProtectionStats.empty() => const ProtectionStats(
         blockedCount: 0,
         sessionBlocked: 0,

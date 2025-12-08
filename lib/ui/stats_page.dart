@@ -1,243 +1,175 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
+// Убедись, что путь к контроллеру верный
+import '../logic/protection_controller.dart'; 
 
-import '../logic/protection_controller.dart';
-import 'strings.dart';
+// Мы определяем класс Strings прямо здесь, чтобы избежать ошибки импорта.
+// Если у тебя есть файл strings.dart, проверь, что класс в нем называется именно 'Strings'.
+class Strings {
+  static const String vpnActive = 'Защита активна';
+  static const String vpnInactive = 'Защита отключена';
+  static const String protectionMode = 'Режим';
+  static const String filterTemporarilyDisabled = 'Фильтрация временно отключена';
+  static const String filterActive = 'Фильтрация работает';
+  static const String blockedTotal = 'Всего заблокировано';
+  static const String blockedSession = 'За сессию';
+  static const String recentBlockedDomains = 'Последние заблокированные';
+}
 
 class StatsPage extends StatefulWidget {
-  const StatsPage({super.key, required this.controller});
-
   final ProtectionController controller;
+
+  const StatsPage({Key? key, required this.controller}) : super(key: key);
 
   @override
   State<StatsPage> createState() => _StatsPageState();
 }
 
 class _StatsPageState extends State<StatsPage> {
-  bool _isRefreshing = false;
-
   @override
   void initState() {
     super.initState();
-    widget.controller.addListener(_onControllerChanged);
-    unawaited(widget.controller.refreshStats());
+    widget.controller.addListener(_onUpdate);
   }
 
   @override
   void dispose() {
-    widget.controller.removeListener(_onControllerChanged);
+    widget.controller.removeListener(_onUpdate);
     super.dispose();
   }
 
-  void _onControllerChanged() {
+  void _onUpdate() {
     setState(() {});
-  }
-
-  Future<void> _refresh() async {
-    if (_isRefreshing) return;
-    setState(() => _isRefreshing = true);
-    await widget.controller.refreshStats();
-    setState(() => _isRefreshing = false);
-  }
-
-  Future<void> _clearRecent() async {
-    await widget.controller.clearRecentBlocks();
-    await widget.controller.refreshStats();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Используем геттеры, которые мы добавили в контроллер на предыдущем шаге
     final stats = widget.controller.stats;
-    final state = widget.controller.state;
-    final isRunning =
-        stats.isRunning || state == ProtectionState.on || state == ProtectionState.turningOn;
+    final failOpen = stats.failOpenActive;
+    final vpnActive = stats.vpnActive; 
+    final mode = stats.modeName;
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(AppStrings.statsHeaderTitle),
+        title: const Text('Статистика и домены'),
       ),
       body: RefreshIndicator(
-        onRefresh: _refresh,
+        onRefresh: () async => widget.controller.refreshStats(),
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            _buildStatusCard(
-              context,
-              isRunning,
-              stats.blockedCount,
-              stats.sessionBlocked,
-              stats.failOpenActive,
+            Card(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              // surfaceVariant может быть устаревшим в новых версиях Flutter,
+              // используем secondaryContainer как безопасную альтернативу, если surfaceVariant недоступен
+              color: colorScheme.secondaryContainer, 
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          vpnActive
+                              ? Icons.shield_rounded
+                              : Icons.shield_outlined,
+                          color: vpnActive
+                              ? Colors.green
+                              : colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          vpnActive
+                              ? Strings.vpnActive
+                              : Strings.vpnInactive,
+                          style: textTheme.titleMedium,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${Strings.protectionMode}: $mode',
+                      style: textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      failOpen
+                          ? Strings.filterTemporarilyDisabled
+                          : Strings.filterActive,
+                      style: TextStyle(
+                        color:
+                            failOpen ? Colors.orangeAccent : Colors.greenAccent,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            Card(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${Strings.blockedTotal}: ${stats.totalBlocked}',
+                      style: textTheme.bodyLarge,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${Strings.blockedSession}: ${stats.sessionBlocked}',
+                      style: textTheme.bodyLarge,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             Text(
-              AppStrings.recentTitle,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700),
+              Strings.recentBlockedDomains,
+              style: textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            _buildRecentList(context),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: _clearRecent,
-                icon: const Icon(Icons.cleaning_services_outlined),
-                label: const Text(AppStrings.clearRecent),
+            if (stats.recentDomains.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Пока ничего не заблокировано — вы в чистом интернете 😌',
+                    style: textTheme.bodyMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: stats.recentDomains.map((entry) {
+                  // ИСПРАВЛЕНИЕ: entry - это объект BlockedEntry. 
+                  // Нам нужно достать из него поле .domain
+                  return ListTile(
+                    leading: const Icon(Icons.public, size: 20),
+                    title: Text(entry.domain),
+                    // Можно добавить время блокировки, если нужно:
+                    // subtitle: Text(entry.timestamp.toString()), 
+                    dense: true,
+                  );
+                }).toList(),
               ),
-            ),
           ],
         ),
       ),
     );
-  }
-
-  Widget _buildStatusCard(BuildContext context, bool isRunning, int blocked,
-      int sessionBlocked, bool failOpenActive) {
-    final icon = isRunning ? Icons.shield : Icons.shield_outlined;
-    final iconColor = isRunning ? Colors.green : Colors.blueGrey;
-    final statusText = isRunning ? AppStrings.vpnActive : AppStrings.vpnInactive;
-    final modeText = AppStrings.modeStatus.replaceFirst('%s', _modeLabel(widget.controller.mode));
-    final filterText = failOpenActive
-        ? AppStrings.filterStatusFailOpen
-        : AppStrings.filterStatusActive;
-    final filterStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: failOpenActive ? Colors.orange.shade700 : Colors.green.shade700,
-          fontWeight: FontWeight.w600,
-        );
-
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(icon, color: iconColor),
-            const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  statusText,
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  modeText,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 2),
-                Text(filterText, style: filterStyle),
-              ],
-            ),
-          ),
-            if (_isRefreshing)
-              const SizedBox(
-                height: 22,
-                width: 22,
-                child: CircularProgressIndicator(strokeWidth: 3),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(AppStrings.sessionLabel,
-                      style: Theme.of(context).textTheme.labelMedium),
-                  const SizedBox(height: 2),
-                  Text(
-                    '$sessionBlocked',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(AppStrings.totalLabel,
-                      style: Theme.of(context).textTheme.labelMedium),
-                  const SizedBox(height: 2),
-                  Text(
-                    '$blocked',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRecentList(BuildContext context) {
-    final entries = widget.controller.stats.recent.reversed.toList();
-    if (entries.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Text(
-          AppStrings.recentEmpty,
-        ),
-      );
-    }
-
-    return Column(
-      children: entries
-          .map(
-            (entry) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.public),
-              title: Text(entry.domain),
-              subtitle: Text(_formatTimestamp(entry.timestamp)),
-            ),
-          )
-          .toList(),
-    );
-  }
-
-  String _formatTimestamp(DateTime timestamp) {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
-
-    if (difference.inDays >= 1) {
-      final dayLabel = difference.inDays == 1
-          ? AppStrings.yesterday
-          : '${difference.inDays} ${AppStrings.daysAgoSuffix}';
-      final time = _twoDigits(timestamp.hour) + ':' + _twoDigits(timestamp.minute);
-      return '$dayLabel $time';
-    }
-
-    return '${_twoDigits(timestamp.hour)}:${_twoDigits(timestamp.minute)}';
-  }
-
-  String _twoDigits(int value) => value.toString().padLeft(2, '0');
-
-  String _modeLabel(ProtectionMode mode) {
-    switch (mode) {
-      case ProtectionMode.light:
-        return AppStrings.protectionModeLight;
-      case ProtectionMode.standard:
-        return AppStrings.protectionModeStandard;
-      case ProtectionMode.strict:
-        return AppStrings.protectionModeStrict;
-    }
   }
 }
