@@ -12,6 +12,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val channel = "digital_defender/protection"
+    private val statsChannel = "digital_defender/stats"
     private val vpnRequestCode = 42
 
     private var pendingResult: MethodChannel.Result? = null
@@ -28,6 +29,15 @@ class MainActivity : FlutterActivity() {
                     "android_start_protection" -> startVpn(result)
                     "android_stop_protection" -> stopVpn(result)
                     "android_get_blocked_count" -> getBlockedCount(result)
+                    else -> result.notImplemented()
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, statsChannel)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getStats" -> getStats(result)
+                    "resetStats" -> resetStats(result)
                     else -> result.notImplemented()
                 }
             }
@@ -59,8 +69,10 @@ class MainActivity : FlutterActivity() {
 
     private fun stopVpn(result: MethodChannel.Result) {
         try {
-            val stopIntent = Intent(this, DigitalDefenderVpnService::class.java)
-            stopService(stopIntent)
+            val stopIntent = Intent(this, DigitalDefenderVpnService::class.java).apply {
+                action = DigitalDefenderVpnService.ACTION_STOP
+            }
+            startService(stopIntent)
             result.success(null)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to stop VPN service", e)
@@ -99,11 +111,29 @@ class MainActivity : FlutterActivity() {
 
     private fun getBlockedCount(result: MethodChannel.Result) {
         try {
-            val count = DigitalDefenderVpnService.readBlockedCount(this)
-            result.success(count)
+            result.success(DigitalDefenderVpnService.readBlockedCount(this))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read blocked count", e)
             result.error("read_failed", "Failed to read blocked count", null)
+        }
+    }
+
+    private fun getStats(result: MethodChannel.Result) {
+        try {
+            result.success(DigitalDefenderStats.getStatsJson(this))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get stats", e)
+            result.error("stats_failed", "Failed to get stats: ${e.message}", null)
+        }
+    }
+
+    private fun resetStats(result: MethodChannel.Result) {
+        try {
+            DigitalDefenderStats.resetStats(this)
+            result.success(null)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to reset stats", e)
+            result.error("reset_failed", "Failed to reset stats: ${e.message}", null)
         }
     }
 

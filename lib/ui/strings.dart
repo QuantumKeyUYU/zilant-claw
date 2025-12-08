@@ -24,4 +24,18 @@ class AppStrings {
       'Приложение не собирает личные данные и не отправляет никакую аналитику наружу.';
   static const String infoControl =
       'Вы в любой момент можете отключить защиту — она не внедряется в системные файлы.';
+
+  static const String protectionEnabled = 'Защита: включена';
+  static const String protectionDisabled = 'Защита: выключена';
+  static const String vpnActive = 'VPN активен';
+  static const String vpnInactive = 'VPN не запущен';
+  static const String totalBlocked = 'Всего заблокировано доменов';
+  static const String refreshStats = 'Обновить данные';
+  static const String resetStats = 'Сбросить статистику';
+  static const String recentTitle = 'Недавние заблокированные домены';
+  static const String nothingBlocked =
+      'Пока ничего не заблокировано — вы в чистом интернете 😌';
+  static const String noRecentBlocks = 'Нет свежих блокировок';
+  static const String yesterday = 'вчера';
+  static const String daysAgoSuffix = 'дн. назад';
 }
