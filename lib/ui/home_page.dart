@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../logic/protection_controller.dart';
+import 'stats_page.dart';
 import 'strings.dart';
 
 class HomePage extends StatefulWidget {
@@ -16,12 +17,14 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool _isRefreshing = false;
+  bool _isChangingMode = false;
 
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_onControllerChanged);
     unawaited(widget.controller.refreshStats());
+    unawaited(widget.controller.loadProtectionMode());
   }
 
   @override
@@ -49,14 +52,39 @@ class _HomePageState extends State<HomePage> {
     await widget.controller.resetStats();
   }
 
+  Future<void> _goToStats(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StatsPage(controller: widget.controller),
+      ),
+    );
+    await widget.controller.refreshStats();
+  }
+
+  Future<void> _changeMode(ProtectionMode mode) async {
+    if (_isChangingMode) return;
+    setState(() => _isChangingMode = true);
+    await widget.controller.setProtectionMode(mode);
+    if (mounted) {
+      final error = widget.controller.statsError;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error ?? AppStrings.protectionModeChanged.replaceFirst('%s', _modeLabel(mode)),
+          ),
+        ),
+      );
+    }
+    setState(() => _isChangingMode = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = widget.controller.state;
     final stats = widget.controller.stats;
     final isOn =
         stats.isRunning || state == ProtectionState.on || state == ProtectionState.turningOn;
-    final isBusy =
-        state == ProtectionState.turningOn || state == ProtectionState.turningOff;
+    final isBusy = state == ProtectionState.turningOn || state == ProtectionState.turningOff;
 
     return Scaffold(
       appBar: AppBar(
@@ -69,14 +97,21 @@ class _HomePageState extends State<HomePage> {
           padding: const EdgeInsets.all(24),
           children: [
             _buildProtectionCard(context, isOn, isBusy, state),
-            const SizedBox(height: 16),
-            _buildStatsCard(context, stats.blockedCount, stats.sessionBlocked),
             const SizedBox(height: 12),
+            _buildModeSelector(context),
+            const SizedBox(height: 12),
+            _buildStatsSummary(context, stats.blockedCount, stats.sessionBlocked),
+            if (widget.controller.statsError != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                widget.controller.statsError!,
+                style: const TextStyle(color: Colors.redAccent),
+              ),
+            ],
+            const SizedBox(height: 8),
             _buildStatsActions(context),
-            const SizedBox(height: 24),
-            _buildRecentHeader(context),
-            const SizedBox(height: 12),
-            _buildRecentList(context),
+            const SizedBox(height: 16),
+            _buildRecentPreview(context),
           ],
         ),
       ),
@@ -127,148 +162,140 @@ class _HomePageState extends State<HomePage> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
-                          ?.copyWith(color: Colors.white),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      subtitle,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: Colors.white70),
-                    ),
-                  ],
-                ),
-                Column(
-                  children: [
-                    Switch.adaptive(
-                      value: isOn,
-                      onChanged: isBusy ? null : (_) => _toggleProtection(),
-                      activeColor: Colors.greenAccent,
-                    ),
-                    if (isBusy)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation(
-                              isOn ? Colors.greenAccent : Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (state == ProtectionState.error && errorMessage != null)
-              Column(
+            Expanded(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    errorMessage,
-                    style: const TextStyle(color: Colors.redAccent),
+                    title,
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      if (needsPermission)
-                        ElevatedButton(
-                          onPressed: _toggleProtection,
-                          child: const Text(AppStrings.grantVpnPermission),
-                        ),
-                      if (!needsPermission)
-                        ElevatedButton(
-                          onPressed: _toggleProtection,
-                          child: const Text(AppStrings.retryStart),
-                        ),
-                    ],
+                  Text(
+                    subtitle,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: Colors.white70),
                   ),
+                  if (state == ProtectionState.error && errorMessage != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      errorMessage,
+                      style: const TextStyle(color: Colors.redAccent),
+                    ),
+                    const SizedBox(height: 6),
+                    if (needsPermission)
+                      ElevatedButton(
+                        onPressed: _toggleProtection,
+                        child: const Text(AppStrings.grantVpnPermission),
+                      )
+                    else
+                      ElevatedButton(
+                        onPressed: _toggleProtection,
+                        child: const Text(AppStrings.retryStart),
+                      )
+                  ],
                 ],
               ),
+            ),
+            Column(
+              children: [
+                Switch.adaptive(
+                  value: isOn,
+                  onChanged: isBusy ? null : (_) => _toggleProtection(),
+                  activeColor: Colors.greenAccent,
+                ),
+                if (isBusy)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(
+                          isOn ? Colors.greenAccent : Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatsCard(
-      BuildContext context, int blockedCount, int sessionBlocked) {
+  Widget _buildModeSelector(BuildContext context) {
+    final currentMode = widget.controller.mode;
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.shield, color: Colors.green),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        AppStrings.totalBlocked,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '$blockedCount',
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-                if (_isRefreshing)
-                  const SizedBox(
-                    height: 28,
-                    width: 28,
-                    child: CircularProgressIndicator(strokeWidth: 3),
-                  ),
-              ],
+            Text(
+              AppStrings.protectionModeLabel,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(Icons.schedule, color: Colors.blueGrey),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(AppStrings.sessionBlocked,
-                        style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 4),
-                    Text('$sessionBlocked',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleLarge
-                            ?.copyWith(fontWeight: FontWeight.w600)),
-                  ],
-                )
-              ],
+            const SizedBox(height: 8),
+            DropdownButton<ProtectionMode>(
+              value: currentMode,
+              isExpanded: true,
+              onChanged: _isChangingMode ? null : (mode) => mode != null ? _changeMode(mode) : null,
+              items: ProtectionMode.values
+                  .map(
+                    (mode) => DropdownMenuItem(
+                      value: mode,
+                      child: Text(_modeLabel(mode)),
+                    ),
+                  )
+                  .toList(),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatsSummary(BuildContext context, int blockedCount, int sessionBlocked) {
+    final summary = AppStrings.blockedCompact
+        .replaceFirst('%s', sessionBlocked.toString())
+        .replaceFirst('%s', blockedCount.toString());
+
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const Icon(Icons.shield, color: Colors.green),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                summary,
+                style:
+                    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
+            if (_isRefreshing)
+              const SizedBox(
+                height: 28,
+                width: 28,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
           ],
         ),
       ),
@@ -279,10 +306,9 @@ class _HomePageState extends State<HomePage> {
     return Row(
       children: [
         Expanded(
-          child: ElevatedButton.icon(
-            onPressed: _refreshStats,
-            icon: const Icon(Icons.refresh),
-            label: const Text(AppStrings.refreshStats),
+          child: ElevatedButton(
+            onPressed: () => _goToStats(context),
+            child: const Text(AppStrings.details),
           ),
         ),
         const SizedBox(width: 12),
@@ -297,25 +323,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildRecentHeader(BuildContext context) {
-    final error = widget.controller.statsError;
-    if (error != null) {
-      return Text(
-        '${AppStrings.statsError}\n$error',
-        style: const TextStyle(color: Colors.redAccent),
-      );
-    }
-    return Text(
-      AppStrings.recentTitle,
-      style: Theme.of(context)
-          .textTheme
-          .titleMedium
-          ?.copyWith(fontWeight: FontWeight.w600),
-    );
-  }
-
-  Widget _buildRecentList(BuildContext context) {
-    final entries = widget.controller.stats.recent.take(20).toList();
+  Widget _buildRecentPreview(BuildContext context) {
+    final entries = widget.controller.stats.recent;
     if (entries.isEmpty) {
       if (widget.controller.stats.blockedCount == 0) {
         return const Text(AppStrings.nothingBlocked);
@@ -323,34 +332,33 @@ class _HomePageState extends State<HomePage> {
       return const Text(AppStrings.noRecentBlocks);
     }
 
-    return Column(
-      children: entries
-          .map(
-            (entry) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.public),
-              title: Text(entry.domain, style: const TextStyle(fontSize: 16)),
-              subtitle: Text(_formatTimestamp(entry.timestamp)),
-            ),
-          )
-          .toList(),
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            AppStrings.recentPreview.replaceFirst('%d', entries.length.toString()),
+            style: Theme.of(context)
+                .textTheme
+                .bodyLarge
+                ?.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ),
+        TextButton(
+          onPressed: () => _goToStats(context),
+          child: const Text(AppStrings.details),
+        ),
+      ],
     );
   }
 
-  String _formatTimestamp(DateTime timestamp) {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
-
-    if (difference.inDays >= 1) {
-      final dayLabel = difference.inDays == 1
-          ? AppStrings.yesterday
-          : '${difference.inDays} ${AppStrings.daysAgoSuffix}';
-      final time = _twoDigits(timestamp.hour) + ':' + _twoDigits(timestamp.minute);
-      return '$dayLabel $time';
+  String _modeLabel(ProtectionMode mode) {
+    switch (mode) {
+      case ProtectionMode.light:
+        return AppStrings.protectionModeLight;
+      case ProtectionMode.standard:
+        return AppStrings.protectionModeStandard;
+      case ProtectionMode.strict:
+        return AppStrings.protectionModeStrict;
     }
-
-    return '${_twoDigits(timestamp.hour)}:${_twoDigits(timestamp.minute)}';
   }
-
-  String _twoDigits(int value) => value.toString().padLeft(2, '0');
 }

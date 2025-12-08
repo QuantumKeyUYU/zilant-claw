@@ -1,0 +1,14 @@
+# Light protection blocklist
+# Core trackers and invasive ad domains
+ads.google.com
+adservice.google.com
+doubleclick.net
+facebook.com
+instagram.com
+snapads.com
+app-measurement.com
+amazon-adsystem.com
+branch.io
+adjust.com
+kochava.com
+unity3d.com

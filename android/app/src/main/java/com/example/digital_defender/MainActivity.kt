@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
@@ -29,6 +30,8 @@ class MainActivity : FlutterActivity() {
                     "android_start_protection" -> startVpn(result)
                     "android_stop_protection" -> stopVpn(result)
                     "android_get_blocked_count" -> getBlockedCount(result)
+                    "setProtectionMode" -> setProtectionMode(call, result)
+                    "getProtectionMode" -> getProtectionMode(result)
                     else -> result.notImplemented()
                 }
             }
@@ -78,6 +81,39 @@ class MainActivity : FlutterActivity() {
             Log.e(TAG, "Failed to stop VPN service", e)
             showToast(getString(R.string.vpn_stop_failed))
             result.error("stop_failed", "Failed to stop VPN service: ${e.message}", null)
+        }
+    }
+
+    private fun setProtectionMode(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val requested = call.argument<String>("mode") ?: DomainBlocklist.MODE_STANDARD
+            val appliedMode = DomainBlocklist.setProtectionMode(this, requested)
+            val intent = Intent(this, DigitalDefenderVpnService::class.java).apply {
+                action = DigitalDefenderVpnService.ACTION_APPLY_PROTECTION_MODE
+            }
+            ContextCompat.startForegroundService(this, intent)
+            showToast(getString(R.string.protection_mode_changed, modeLabel(appliedMode)))
+            result.success(appliedMode)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set protection mode", e)
+            result.error("set_mode_failed", "Failed to set protection mode: ${e.message}", null)
+        }
+    }
+
+    private fun getProtectionMode(result: MethodChannel.Result) {
+        try {
+            result.success(DomainBlocklist.getProtectionMode(this))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get protection mode", e)
+            result.error("get_mode_failed", "Failed to get protection mode", null)
+        }
+    }
+
+    private fun modeLabel(mode: String): String {
+        return when (mode.lowercase()) {
+            DomainBlocklist.MODE_LIGHT -> getString(R.string.protection_mode_light)
+            DomainBlocklist.MODE_STRICT -> getString(R.string.protection_mode_strict)
+            else -> getString(R.string.protection_mode_standard)
         }
     }
 
