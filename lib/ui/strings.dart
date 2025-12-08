@@ -27,9 +27,11 @@ class AppStrings {
 
   static const String protectionEnabled = 'Защита: включена';
   static const String protectionDisabled = 'Защита: выключена';
+  static const String protectionUnknown = 'Статус защиты неизвестен';
   static const String vpnActive = 'VPN активен';
   static const String vpnInactive = 'VPN не запущен';
   static const String totalBlocked = 'Всего заблокировано доменов';
+  static const String sessionBlocked = 'За текущую сессию';
   static const String refreshStats = 'Обновить данные';
   static const String resetStats = 'Сбросить статистику';
   static const String recentTitle = 'Недавние заблокированные домены';
@@ -38,4 +40,7 @@ class AppStrings {
   static const String noRecentBlocks = 'Нет свежих блокировок';
   static const String yesterday = 'вчера';
   static const String daysAgoSuffix = 'дн. назад';
+  static const String grantVpnPermission = 'Выдать разрешение';
+  static const String retryStart = 'Попробовать ещё раз';
+  static const String statsError = 'Не удалось обновить статистику.';
 }

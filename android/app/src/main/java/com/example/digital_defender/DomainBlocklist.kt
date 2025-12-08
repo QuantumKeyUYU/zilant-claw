@@ -18,16 +18,17 @@ object DomainBlocklist {
     @Synchronized
     fun init(context: Context) {
         if (initialized && domains.isNotEmpty()) return
-        if (loadFromLocalFile(context)) {
-            Log.i(TAG, "Loaded ${domains.size} domains from local file $LOCAL_FILE")
-        } else if (loadFromAsset(context)) {
-            Log.i(TAG, "Loaded ${domains.size} domains from assets/$ASSET_FILE")
-        } else {
-            Log.w(TAG, "Failed to load blocklist; continuing with empty list")
+        val loadedFromLocal = loadFromLocalFile(context)
+        val loadedFromAsset = if (!loadedFromLocal) loadFromAsset(context) else false
+
+        when {
+            loadedFromLocal -> Log.i(TAG, "Loaded ${domains.size} domains from local file $LOCAL_FILE")
+            loadedFromAsset -> Log.i(TAG, "Loaded ${domains.size} domains from assets/$ASSET_FILE")
+            else -> Log.w(TAG, "Failed to load blocklist; continuing with empty list")
         }
     }
 
-    fun refreshFromNetwork(context: Context, url: String) {
+    fun refreshFromNetwork(context: Context, url: String): Boolean {
         try {
             val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
@@ -38,13 +39,19 @@ object DomainBlocklist {
             val responseCode = connection.responseCode
             if (responseCode != HttpURLConnection.HTTP_OK) {
                 Log.w(TAG, "Failed to refresh blocklist: HTTP $responseCode from $url")
-                return
+                return false
             }
 
             val body = connection.inputStream.bufferedReader().use { it.readText() }
             if (body.isBlank()) {
                 Log.w(TAG, "Failed to refresh blocklist: empty response from $url")
-                return
+                return false
+            }
+
+            val parsed = body.byteInputStream().use { parseStream(it) }
+            if (parsed.isEmpty()) {
+                Log.w(TAG, "Failed to refresh blocklist: parsed empty list from $url")
+                return false
             }
 
             context.openFileOutput(LOCAL_FILE, Context.MODE_PRIVATE).use { output ->
@@ -52,12 +59,14 @@ object DomainBlocklist {
             }
 
             synchronized(this) {
-                if (loadFromLocalFile(context)) {
-                    Log.i(TAG, "Refreshed blocklist from $url, ${domains.size} domains")
-                }
+                replaceDomains(parsed)
+                initialized = true
+                Log.i(TAG, "Refreshed blocklist from $url, ${domains.size} domains")
             }
+            return true
         } catch (e: Exception) {
             Log.w(TAG, "Failed to refresh blocklist from $url", e)
+            return false
         }
     }
 
@@ -90,6 +99,7 @@ object DomainBlocklist {
             val loaded = parseStream(context.openFileInput(LOCAL_FILE))
             replaceDomains(loaded)
             initialized = true
+            Log.d(TAG, "Loaded ${loaded.size} domains from internal storage")
             true
         } catch (e: FileNotFoundException) {
             Log.i(TAG, "Local blocklist $LOCAL_FILE not found; will fall back to assets")
@@ -106,6 +116,7 @@ object DomainBlocklist {
             val loaded = parseStream(context.assets.open(ASSET_FILE))
             replaceDomains(loaded)
             initialized = true
+            Log.d(TAG, "Loaded ${loaded.size} domains from assets")
             true
         } catch (e: Exception) {
             Log.w(TAG, "Failed to load blocklist from assets/$ASSET_FILE", e)

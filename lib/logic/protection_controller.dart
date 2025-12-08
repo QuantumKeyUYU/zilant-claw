@@ -17,11 +17,13 @@ class ProtectionController extends ChangeNotifier {
 
   ProtectionState _state = ProtectionState.off;
   String? _errorMessage;
+  String? _errorCode;
   ProtectionStats _stats = ProtectionStats.empty();
   String? _statsError;
 
   ProtectionState get state => _state;
   String? get errorMessage => _errorMessage;
+  String? get errorCode => _errorCode;
   ProtectionStats get stats => _stats;
   String? get statsError => _statsError;
 
@@ -48,20 +50,20 @@ class ProtectionController extends ChangeNotifier {
       _setError('Платформа не поддерживается на этом этапе.');
       return;
     }
-      _updateState(ProtectionState.turningOn);
-      try {
-        if (Platform.isAndroid) {
-          await _channel.invokeMethod('android_start_protection');
-        } else if (Platform.isWindows) {
-          await _channel.invokeMethod('windows_start_protection');
-        }
-        _updateState(ProtectionState.on);
-        await refreshStats();
-      } on PlatformException catch (e) {
-        _setError(e.message ?? 'Ошибка платформы.');
-      } catch (_) {
-        _setError('Не удалось включить защиту. Проверь разрешения VPN.');
+    _updateState(ProtectionState.turningOn);
+    try {
+      if (Platform.isAndroid) {
+        await _channel.invokeMethod('android_start_protection');
+      } else if (Platform.isWindows) {
+        await _channel.invokeMethod('windows_start_protection');
       }
+      _updateState(ProtectionState.on);
+      await refreshStats();
+    } on PlatformException catch (e) {
+      _setError(_mapPlatformError(e), code: e.code);
+    } catch (_) {
+      _setError('Не удалось включить защиту. Проверь разрешения VPN.');
+    }
   }
 
   Future<void> turnOffProtection() async {
@@ -72,20 +74,20 @@ class ProtectionController extends ChangeNotifier {
       _setError('Платформа не поддерживается на этом этапе.');
       return;
     }
-      _updateState(ProtectionState.turningOff);
-      try {
-        if (Platform.isAndroid) {
-          await _channel.invokeMethod('android_stop_protection');
-        } else if (Platform.isWindows) {
-          await _channel.invokeMethod('windows_stop_protection');
-        }
-        _updateState(ProtectionState.off);
-        await refreshStats();
-      } on PlatformException catch (e) {
-        _setError(e.message ?? 'Ошибка платформы.');
-      } catch (_) {
-        _setError('Не удалось выключить защиту.');
+    _updateState(ProtectionState.turningOff);
+    try {
+      if (Platform.isAndroid) {
+        await _channel.invokeMethod('android_stop_protection');
+      } else if (Platform.isWindows) {
+        await _channel.invokeMethod('windows_stop_protection');
       }
+      _updateState(ProtectionState.off);
+      await refreshStats();
+    } on PlatformException catch (e) {
+      _setError(e.message ?? 'Ошибка платформы.', code: e.code);
+    } catch (_) {
+      _setError('Не удалось выключить защиту.');
+    }
   }
 
   Future<void> refreshStats() async {
@@ -101,6 +103,7 @@ class ProtectionController extends ChangeNotifier {
         final decoded = jsonDecode(result) as Map<String, dynamic>;
         _stats = ProtectionStats.fromJson(decoded);
         _statsError = null;
+        _syncStateWithStats();
       }
     } catch (e) {
       _statsError = 'Не удалось получить статистику. Попробуйте ещё раз.';
@@ -127,24 +130,69 @@ class ProtectionController extends ChangeNotifier {
   void _updateState(ProtectionState newState) {
     _state = newState;
     _errorMessage = null;
+    _errorCode = null;
     notifyListeners();
   }
 
-  void _setError(String message) {
+  void _setError(String message, {String? code}) {
     _state = ProtectionState.error;
     _errorMessage = message;
+    _errorCode = code;
     notifyListeners();
+  }
+
+  String _mapPlatformError(PlatformException e) {
+    switch (e.code) {
+      case 'denied':
+        return 'Не хватает разрешения на создание VPN. Разрешите доступ и попробуйте ещё раз.';
+      case 'start_failed':
+        return 'Не удалось запустить VPN. Попробуйте ещё раз или перезагрузите устройство.';
+      default:
+        return e.message ?? 'Произошла ошибка на уровне платформы.';
+    }
+  }
+
+  void _syncStateWithStats() {
+    final running = _stats.isRunning;
+    if (running && _state == ProtectionState.turningOn) {
+      _state = ProtectionState.on;
+      _errorMessage = null;
+      _errorCode = null;
+    } else if (!running && _state == ProtectionState.turningOff) {
+      _state = ProtectionState.off;
+    } else if (running && _state == ProtectionState.error) {
+      _state = ProtectionState.on;
+      _errorMessage = null;
+      _errorCode = null;
+    } else if (!running && _state == ProtectionState.error) {
+      _state = ProtectionState.off;
+    } else if (running && _state == ProtectionState.off) {
+      _state = ProtectionState.on;
+    } else if (!running && _state == ProtectionState.on) {
+      _state = ProtectionState.off;
+    }
   }
 }
 
 class ProtectionStats {
-  const ProtectionStats({required this.blockedCount, required this.recent});
+  const ProtectionStats({
+    required this.blockedCount,
+    required this.sessionBlocked,
+    required this.recent,
+    required this.isRunning,
+  });
 
   final int blockedCount;
+  final int sessionBlocked;
   final List<BlockedEntry> recent;
+  final bool isRunning;
 
-  factory ProtectionStats.empty() =>
-      const ProtectionStats(blockedCount: 0, recent: []);
+  factory ProtectionStats.empty() => const ProtectionStats(
+        blockedCount: 0,
+        sessionBlocked: 0,
+        recent: [],
+        isRunning: false,
+      );
 
   factory ProtectionStats.fromJson(Map<String, dynamic> json) {
     final recentRaw = json['recent'];
@@ -164,7 +212,22 @@ class ProtectionStats {
             ? countRaw.toInt()
             : 0;
 
-    return ProtectionStats(blockedCount: blockedCount, recent: recentEntries);
+    final sessionRaw = json['sessionBlocked'];
+    final sessionBlocked = sessionRaw is int
+        ? sessionRaw
+        : sessionRaw is num
+            ? sessionRaw.toInt()
+            : 0;
+
+    final runningRaw = json['running'];
+    final isRunning = runningRaw is bool ? runningRaw : false;
+
+    return ProtectionStats(
+      blockedCount: blockedCount,
+      sessionBlocked: sessionBlocked,
+      recent: recentEntries,
+      isRunning: isRunning,
+    );
   }
 }
 
