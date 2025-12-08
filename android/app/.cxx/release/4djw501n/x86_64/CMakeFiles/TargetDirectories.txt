@@ -1,0 +1,2 @@
+C:/Users/uyuke/zilant-claw/android/app/.cxx/release/4djw501n/x86_64/CMakeFiles/edit_cache.dir
+C:/Users/uyuke/zilant-claw/android/app/.cxx/release/4djw501n/x86_64/CMakeFiles/rebuild_cache.dir

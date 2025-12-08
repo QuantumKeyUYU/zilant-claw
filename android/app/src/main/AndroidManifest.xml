@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.digital_defender">
 
@@ -7,6 +8,7 @@
     <application
         android:label="Digital Defender"
         android:icon="@mipmap/ic_launcher">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -29,5 +31,11 @@
                 <action android:name="android.net.VpnService" />
             </intent-filter>
         </service>
+
+        <!-- ВКЛЮЧАЕМ Flutter v2 embedding -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
     </application>
+
 </manifest>

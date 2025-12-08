@@ -116,8 +116,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildToggle(BuildContext context, ProtectionState state) {
-    final isBusy =
-        state == ProtectionState.turningOn || state == ProtectionState.turningOff;
+    final isBusy = state == ProtectionState.turningOn ||
+        state == ProtectionState.turningOff;
     final isOn = state == ProtectionState.on;
 
     return GestureDetector(

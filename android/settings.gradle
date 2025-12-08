@@ -1,18 +1,41 @@
 pluginManagement {
+    def flutterSdkPath = {
+        def properties = new Properties()
+        file("local.properties").withInputStream { properties.load(it) }
+        def flutterSdkPath = properties.getProperty("flutter.sdk")
+        assert flutterSdkPath != null : "flutter.sdk not set in local.properties"
+        return flutterSdkPath
+    }
+
+    // путь до Flutter SDK
+    settings.ext.flutterSdkPath = flutterSdkPath()
+
+    // подключаем build-скрипты Flutter
+    includeBuild("${settings.ext.flutterSdkPath}/packages/flutter_tools/gradle")
+
     repositories {
         google()
         mavenCentral()
         gradlePluginPortal()
+        maven {
+            // репо Flutter (для его зависимостей и плагина)
+            url = uri("https://storage.googleapis.com/download.flutter.io")
+        }
+    }
+
+    plugins {
+        // сам flutter-gradle-плагин
+        id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
     }
 }
 
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        google()
-        mavenCentral()
-    }
+plugins {
+    // loader, который протягивает Flutter-плагин в проект
+    id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+
+    // версии AGP и Kotlin — нормальные для твоего Flutter
+    id "com.android.application" version "8.6.0" apply false
+    id "org.jetbrains.kotlin.android" version "2.1.0" apply false
 }
 
-rootProject.name = "digital_defender"
 include ":app"
