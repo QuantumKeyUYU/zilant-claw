@@ -25,15 +25,20 @@ class DigitalDefenderVpnService : VpnService() {
     private var workerThread: Thread? = null
     private var worker: DnsVpnWorker? = null
     private var running = false
-    private lateinit var blocklist: DomainBlocklist
+    private val blocklist = DomainBlocklist
     private lateinit var preferences: SharedPreferences
     private var blockedCount: Long = 0
+    private val upstreamServers = listOf(
+        InetSocketAddress("1.1.1.1", 53),
+        InetSocketAddress("8.8.8.8", 53)
+    )
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "onCreate")
         preferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        blocklist = DomainBlocklist.load(applicationContext)
+        Log.d(TAG, "onCreate")
+        blocklist.init(this)
+        maybeRefreshBlocklist()
         blockedCount = readBlockedCount(this)
     }
 
@@ -96,8 +101,12 @@ class DigitalDefenderVpnService : VpnService() {
                 .setSession("Digital Defender")
                 .setBlocking(true)
                 .addAddress("10.0.0.2", 32)
-                .addDnsServer("1.1.1.1")
-                .addRoute("0.0.0.0", 0)
+                .apply {
+                    upstreamServers.forEach { server ->
+                        addDnsServer(server.address)
+                        addRoute(server.address.hostAddress, 32)
+                    }
+                }
 
             vpnInterface = builder.establish()
             if (vpnInterface == null) {
@@ -116,11 +125,7 @@ class DigitalDefenderVpnService : VpnService() {
 
     private fun startWorker(tunnel: ParcelFileDescriptor) {
         running = true
-        val upstreams = listOf(
-            InetSocketAddress("1.1.1.1", 53),
-            InetSocketAddress("8.8.8.8", 53)
-        )
-        worker = DnsVpnWorker(this, tunnel, blocklist, upstreams)
+        worker = DnsVpnWorker(this, tunnel, blocklist, upstreamServers)
         workerThread = thread(start = true, name = "DnsVpnWorker") {
             worker?.run()
         }
@@ -433,6 +438,9 @@ class DigitalDefenderVpnService : VpnService() {
         private const val DEBUG_DNS = false
         private const val PREFS_NAME = "digital_defender_prefs"
         private const val KEY_BLOCKED_COUNT = "blocked_count"
+        private const val KEY_LAST_BLOCKLIST_UPDATE = "last_blocklist_update"
+        private const val BLOCKLIST_URL = "https://example.com/digital-defender/blocklist.txt" // TODO: replace with real URL
+        private const val BLOCKLIST_REFRESH_INTERVAL_MS = 60 * 60 * 1000L
 
         fun readBlockedCount(context: Context): Long {
             return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -444,5 +452,19 @@ class DigitalDefenderVpnService : VpnService() {
     private fun incrementBlockedCount() {
         blockedCount += 1
         preferences.edit().putLong(KEY_BLOCKED_COUNT, blockedCount).apply()
+    }
+
+    private fun maybeRefreshBlocklist() {
+        val now = System.currentTimeMillis()
+        val lastUpdate = preferences.getLong(KEY_LAST_BLOCKLIST_UPDATE, 0L)
+        if (now - lastUpdate < BLOCKLIST_REFRESH_INTERVAL_MS) {
+            Log.d(TAG, "Skipping blocklist refresh; last attempted at $lastUpdate")
+            return
+        }
+
+        thread(name = "BlocklistRefresh", start = true) {
+            blocklist.refreshFromNetwork(this, BLOCKLIST_URL)
+            preferences.edit().putLong(KEY_LAST_BLOCKLIST_UPDATE, System.currentTimeMillis()).apply()
+        }
     }
 }
