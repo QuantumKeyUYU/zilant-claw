@@ -16,3 +16,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/blocklists/android_basic.txt
+    - assets/blocklists/blocklist_light.txt
+    - assets/blocklists/blocklist_standard.txt
+    - assets/blocklists/blocklist_strict.txt

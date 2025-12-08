@@ -32,6 +32,7 @@ class DigitalDefenderVpnService : VpnService() {
     private lateinit var preferences: SharedPreferences
     private var blockedCount: Long = 0
     private var sessionBlockedCount: Long = 0
+    private var failOpenActive: Boolean = false
     private val upstreamServers = listOf(
         InetSocketAddress("1.1.1.1", 53),
         InetSocketAddress("8.8.8.8", 53)
@@ -45,6 +46,7 @@ class DigitalDefenderVpnService : VpnService() {
         maybeRefreshBlocklist()
         blockedCount = readBlockedCount(this)
         sessionBlockedCount = DigitalDefenderStats.readSessionBlockedCount(this)
+        failOpenActive = DigitalDefenderStats.readFailOpenActive(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -154,6 +156,7 @@ class DigitalDefenderVpnService : VpnService() {
             } else {
                 Log.d(TAG, "VPN interface established")
                 resetSessionCounters()
+                setFailOpenActive(false)
                 startWorker(vpnInterface!!)
                 setProtectionEnabled(true)
                 Log.i(TAG, "VPN started")
@@ -193,6 +196,7 @@ class DigitalDefenderVpnService : VpnService() {
             vpnInterface = null
             resetSessionCounters()
             setProtectionEnabled(false)
+            setFailOpenActive(false)
         }
     }
 
@@ -211,6 +215,9 @@ class DigitalDefenderVpnService : VpnService() {
             soTimeout = 3000
             vpnService.protect(this)
         }
+        private var failOpen = failOpenActive
+        private var consecutiveFailures = 0
+        private var failureWindowStartMs = 0L
 
         fun run() {
             val buffer = ByteArray(32767)
@@ -308,7 +315,7 @@ class DigitalDefenderVpnService : VpnService() {
             }
 
             val domain = query.domain
-            if (blocklist.isBlocked(domain)) {
+            if (!failOpen && blocklist.isBlocked(domain)) {
                 if (DEBUG_DNS) {
                     Log.d(TAG, "DNS query: $domain -> BLOCKED")
                 }
@@ -331,44 +338,113 @@ class DigitalDefenderVpnService : VpnService() {
             dnsOffset: Int,
             dnsLength: Int
         ) {
+            val dnsPayload = packet.copyOfRange(dnsOffset, dnsOffset + dnsLength)
             var attempts = 0
             while (attempts < upstreamServers.size) {
                 val upstream = upstreamServers[currentUpstreamIndex]
-                try {
-                    val dnsPayload = packet.copyOfRange(dnsOffset, dnsOffset + dnsLength)
-                    val request = DatagramPacket(dnsPayload, dnsPayload.size, upstream)
-                    socket.send(request)
-
-                    val responseBuffer = ByteArray(512)
-                    val responsePacket = DatagramPacket(responseBuffer, responseBuffer.size)
-                    socket.receive(responsePacket)
-
-                    val srcIp = packet.copyOfRange(12, 16)
-                    val destIp = packet.copyOfRange(16, 20)
-                    val response = buildIpUdpPacket(
-                        responsePacket.data,
-                        responsePacket.length,
-                        destIp,
-                        srcIp,
-                        destPort,
-                        srcPort
-                    )
-                    output.write(response, 0, response.size)
-                    return
-                } catch (e: SocketTimeoutException) {
-                    if (DEBUG_DNS) {
-                        Log.d(TAG, "Upstream timeout for ${upstream.address}")
-                    }
-                } catch (e: IOException) {
-                    Log.w(TAG, "Failed to forward DNS request to ${upstream.address}", e)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to forward DNS request", e)
+                if (tryUpstream(upstream, dnsPayload, packet, srcPort, destPort)) {
                     return
                 }
                 currentUpstreamIndex = (currentUpstreamIndex + 1) % upstreamServers.size
                 attempts++
             }
-            Log.w(TAG, "All upstream DNS servers failed for current request")
+
+            val fallback = tryBuildOriginalDestination(packet, destPort)
+            if (fallback != null) {
+                if (tryUpstream(fallback, dnsPayload, packet, srcPort, destPort)) {
+                    Log.w(TAG, "Used fallback DNS ${fallback.address} after upstream failures")
+                    return
+                }
+            }
+
+            Log.w(TAG, "All upstream DNS servers failed for current request; letting client retry")
+            recordUpstreamFailure()
+        }
+
+        private fun tryUpstream(
+            upstream: InetSocketAddress,
+            dnsPayload: ByteArray,
+            packet: ByteArray,
+            srcPort: Int,
+            destPort: Int
+        ): Boolean {
+            return try {
+                val request = DatagramPacket(dnsPayload, dnsPayload.size, upstream)
+                socket.send(request)
+
+                val responseBuffer = ByteArray(512)
+                val responsePacket = DatagramPacket(responseBuffer, responseBuffer.size)
+                socket.receive(responsePacket)
+
+                recordUpstreamSuccess()
+
+                val srcIp = packet.copyOfRange(12, 16)
+                val destIp = packet.copyOfRange(16, 20)
+                val response = buildIpUdpPacket(
+                    responsePacket.data,
+                    responsePacket.length,
+                    destIp,
+                    srcIp,
+                    destPort,
+                    srcPort
+                )
+                output.write(response, 0, response.size)
+                true
+            } catch (e: SocketTimeoutException) {
+                if (DEBUG_DNS) {
+                    Log.d(TAG, "Upstream timeout for ${upstream.address}")
+                }
+                recordUpstreamFailure()
+                false
+            } catch (e: IOException) {
+                Log.w(TAG, "Failed to forward DNS request to ${upstream.address}", e)
+                recordUpstreamFailure()
+                false
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to forward DNS request", e)
+                recordUpstreamFailure()
+                false
+            }
+        }
+
+        private fun recordUpstreamSuccess() {
+            consecutiveFailures = 0
+            failureWindowStartMs = 0L
+            if (failOpen) {
+                failOpen = false
+                setFailOpenActive(false)
+                Log.i(TAG, "Upstream DNS healthy again; returning to filtered mode")
+            }
+        }
+
+        private fun recordUpstreamFailure() {
+            val now = System.currentTimeMillis()
+            if (failureWindowStartMs == 0L || now - failureWindowStartMs > FAIL_OPEN_WINDOW_MS) {
+                failureWindowStartMs = now
+                consecutiveFailures = 1
+            } else {
+                consecutiveFailures += 1
+            }
+
+            if (!failOpen && consecutiveFailures >= FAIL_OPEN_THRESHOLD) {
+                failOpen = true
+                setFailOpenActive(true)
+                Log.w(
+                    TAG,
+                    "Entering fail-open mode after $consecutiveFailures upstream failures; temporarily bypassing blocklist"
+                )
+            }
+        }
+
+        private fun tryBuildOriginalDestination(packet: ByteArray, destPort: Int): InetSocketAddress? {
+            return try {
+                val destIp = packet.copyOfRange(16, 20)
+                val address = java.net.InetAddress.getByAddress(destIp)
+                InetSocketAddress(address, destPort)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to build fallback DNS destination", e)
+                null
+            }
         }
 
         private fun sendBlockedResponse(
@@ -498,12 +574,15 @@ class DigitalDefenderVpnService : VpnService() {
         internal const val PREFS_NAME = "digital_defender_prefs"
         internal const val KEY_BLOCKED_COUNT = "blocked_count"
         internal const val KEY_SESSION_BLOCKED_COUNT = "session_blocked_count"
+        internal const val KEY_FAIL_OPEN_ACTIVE = "fail_open_active"
         private const val KEY_LAST_BLOCKLIST_UPDATE = "last_blocklist_update"
         internal const val KEY_RECENT_BLOCKS = "recent_blocks"
         internal const val KEY_PROTECTION_ENABLED = "protection_enabled"
         private const val BLOCKLIST_REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000L
         const val ACTION_STOP = "com.example.digital_defender.STOP"
         const val ACTION_APPLY_PROTECTION_MODE = "com.example.digital_defender.APPLY_PROTECTION_MODE"
+        private const val FAIL_OPEN_THRESHOLD = 5
+        private const val FAIL_OPEN_WINDOW_MS = 15_000L
 
         fun readBlockedCount(context: Context): Long {
             return DigitalDefenderStats.readBlockedCount(context)
@@ -525,6 +604,11 @@ class DigitalDefenderVpnService : VpnService() {
 
     private fun setProtectionEnabled(enabled: Boolean) {
         preferences.edit().putBoolean(KEY_PROTECTION_ENABLED, enabled).apply()
+    }
+
+    private fun setFailOpenActive(active: Boolean) {
+        failOpenActive = active
+        preferences.edit().putBoolean(KEY_FAIL_OPEN_ACTIVE, active).apply()
     }
 
     private fun maybeRefreshBlocklist() {
@@ -557,7 +641,7 @@ data class BlockedEntry(
 )
 
 object DigitalDefenderStats {
-    private const val MAX_RECENT = 50
+    private const val MAX_RECENT = 100
 
     fun readBlockedCount(context: Context): Long {
         return context.getSharedPreferences(DigitalDefenderVpnService.PREFS_NAME, Context.MODE_PRIVATE)
@@ -567,6 +651,11 @@ object DigitalDefenderStats {
     fun readSessionBlockedCount(context: Context): Long {
         return context.getSharedPreferences(DigitalDefenderVpnService.PREFS_NAME, Context.MODE_PRIVATE)
             .getLong(DigitalDefenderVpnService.KEY_SESSION_BLOCKED_COUNT, 0L)
+    }
+
+    fun readFailOpenActive(context: Context): Boolean {
+        return context.getSharedPreferences(DigitalDefenderVpnService.PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(DigitalDefenderVpnService.KEY_FAIL_OPEN_ACTIVE, false)
     }
 
     fun resetSessionCount(context: Context) {
@@ -605,6 +694,7 @@ object DigitalDefenderStats {
         val sessionBlocked = prefs.getLong(DigitalDefenderVpnService.KEY_SESSION_BLOCKED_COUNT, 0L)
         val protectionEnabled = prefs.getBoolean(DigitalDefenderVpnService.KEY_PROTECTION_ENABLED, false)
         val protectionMode = DomainBlocklist.getProtectionMode(context)
+        val failOpenActive = prefs.getBoolean(DigitalDefenderVpnService.KEY_FAIL_OPEN_ACTIVE, false)
         val recent = loadRecent(prefs)
 
         val recentArray = JSONArray()
@@ -620,6 +710,7 @@ object DigitalDefenderStats {
         root.put("sessionBlocked", sessionBlocked)
         root.put("running", protectionEnabled)
         root.put("mode", protectionMode)
+        root.put("failOpenActive", failOpenActive)
         root.put("recent", recentArray)
         return root.toString()
     }
@@ -630,6 +721,14 @@ object DigitalDefenderStats {
         prefs.edit()
             .putLong(DigitalDefenderVpnService.KEY_BLOCKED_COUNT, 0L)
             .putLong(DigitalDefenderVpnService.KEY_SESSION_BLOCKED_COUNT, 0L)
+            .putString(DigitalDefenderVpnService.KEY_RECENT_BLOCKS, JSONArray().toString())
+            .apply()
+    }
+
+    @Synchronized
+    fun clearRecent(context: Context) {
+        val prefs = context.getSharedPreferences(DigitalDefenderVpnService.PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
             .putString(DigitalDefenderVpnService.KEY_RECENT_BLOCKS, JSONArray().toString())
             .apply()
     }

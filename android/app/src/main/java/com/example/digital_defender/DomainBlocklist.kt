@@ -16,11 +16,15 @@ object DomainBlocklist {
     private const val DEFAULT_MODE = MODE_STANDARD
     private const val BLOCKLIST_BASE_URL = "https://example.com/digital-defender/blocklist"
     private val assetFiles = mapOf(
+        MODE_LIGHT to "blocklists/blocklist_light.txt",
+        MODE_STANDARD to "blocklists/blocklist_standard.txt",
+        MODE_STRICT to "blocklists/blocklist_strict.txt"
+    )
+    private val localFiles = mapOf(
         MODE_LIGHT to "blocklist_light.txt",
         MODE_STANDARD to "blocklist_standard.txt",
         MODE_STRICT to "blocklist_strict.txt"
     )
-    private val localFiles = assetFiles
     private val domains = HashSet<String>()
     @Volatile
     private var initialized = false
@@ -39,6 +43,9 @@ object DomainBlocklist {
             loadedFromLocal -> Log.i(TAG, "Loaded ${domains.size} domains from local file ${localFiles[mode]}")
             loadedFromAsset -> Log.i(TAG, "Loaded ${domains.size} domains from assets/${assetFiles[mode]}")
             else -> Log.w(TAG, "Failed to load blocklist; continuing with empty list")
+        }
+        if (domains.isEmpty()) {
+            ensureFallbackList(context, mode)
         }
     }
 
@@ -81,10 +88,14 @@ object DomainBlocklist {
                 initializedMode = mode
                 Log.i(TAG, "Refreshed blocklist from $url, ${domains.size} domains")
             }
-            return true
+            if (domains.isEmpty()) {
+                ensureFallbackList(context, mode)
+            }
+            return domains.isNotEmpty()
         } catch (e: Exception) {
             Log.w(TAG, "Failed to refresh blocklist from $url", e)
-            return false
+            ensureFallbackList(context, mode)
+            return domains.isNotEmpty()
         }
     }
 
@@ -175,7 +186,6 @@ object DomainBlocklist {
         prefs.edit().putString(PREFS_KEY_PROTECTION_MODE, normalized).apply()
         synchronized(this) {
             initialized = false
-            domains.clear()
         }
         return normalized
     }
@@ -215,5 +225,12 @@ object DomainBlocklist {
     private fun replaceDomains(newDomains: Set<String>) {
         domains.clear()
         domains.addAll(newDomains)
+    }
+
+    private fun ensureFallbackList(context: Context, mode: String) {
+        if (domains.isNotEmpty()) return
+        val loadedLocal = loadFromLocalFile(context, mode)
+        if (loadedLocal) return
+        loadFromAsset(context, mode)
     }
 }

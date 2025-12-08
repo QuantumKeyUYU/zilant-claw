@@ -84,6 +84,7 @@ class _HomePageState extends State<HomePage> {
     final stats = widget.controller.stats;
     final isOn =
         stats.isRunning || state == ProtectionState.on || state == ProtectionState.turningOn;
+    final failOpenActive = stats.failOpenActive;
     final isBusy = state == ProtectionState.turningOn || state == ProtectionState.turningOff;
 
     return Scaffold(
@@ -96,22 +97,22 @@ class _HomePageState extends State<HomePage> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            _buildProtectionCard(context, isOn, isBusy, state),
-            const SizedBox(height: 12),
+            _buildProtectionCard(context, isOn, isBusy, state, failOpenActive),
+            const SizedBox(height: 8),
+            _buildProtectionHint(isOn),
+            const SizedBox(height: 16),
             _buildModeSelector(context),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             _buildStatsSummary(context, stats.blockedCount, stats.sessionBlocked),
+            const SizedBox(height: 12),
+            _buildStatsActions(context),
             if (widget.controller.statsError != null) ...[
-              const SizedBox(height: 6),
+              const SizedBox(height: 12),
               Text(
                 widget.controller.statsError!,
                 style: const TextStyle(color: Colors.redAccent),
               ),
             ],
-            const SizedBox(height: 8),
-            _buildStatsActions(context),
-            const SizedBox(height: 16),
-            _buildRecentPreview(context),
           ],
         ),
       ),
@@ -123,6 +124,7 @@ class _HomePageState extends State<HomePage> {
     bool isOn,
     bool isBusy,
     ProtectionState state,
+    bool failOpenActive,
   ) {
     final errorMessage = widget.controller.errorMessage;
     final needsPermission = widget.controller.errorCode == 'denied';
@@ -162,75 +164,101 @@ class _HomePageState extends State<HomePage> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineSmall
-                        ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        subtitle,
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(color: Colors.white70),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    subtitle,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: Colors.white70),
-                  ),
-                  if (state == ProtectionState.error && errorMessage != null) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      errorMessage,
-                      style: const TextStyle(color: Colors.redAccent),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Switch.adaptive(
+                      value: isOn,
+                      onChanged: isBusy ? null : (_) => _toggleProtection(),
+                      activeColor: Colors.greenAccent,
                     ),
-                    const SizedBox(height: 6),
-                    if (needsPermission)
-                      ElevatedButton(
+                    if (isBusy)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation(
+                              isOn ? Colors.greenAccent : Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+            if (failOpenActive) ...[
+              const SizedBox(height: 10),
+              Text(
+                AppStrings.protectionFailOpenWarning,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Colors.amber.shade200, fontWeight: FontWeight.w600),
+              ),
+            ],
+            if (state == ProtectionState.error && errorMessage != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                errorMessage,
+                style: const TextStyle(color: Colors.redAccent),
+              ),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: needsPermission
+                    ? ElevatedButton(
                         onPressed: _toggleProtection,
                         child: const Text(AppStrings.grantVpnPermission),
                       )
-                    else
-                      ElevatedButton(
+                    : ElevatedButton(
                         onPressed: _toggleProtection,
                         child: const Text(AppStrings.retryStart),
-                      )
-                  ],
-                ],
-              ),
-            ),
-            Column(
-              children: [
-                Switch.adaptive(
-                  value: isOn,
-                  onChanged: isBusy ? null : (_) => _toggleProtection(),
-                  activeColor: Colors.greenAccent,
-                ),
-                if (isBusy)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation(
-                          isOn ? Colors.greenAccent : Colors.white,
-                        ),
                       ),
-                    ),
-                  ),
-              ],
-            ),
+              )
+            ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildProtectionHint(bool isOn) {
+    final text = isOn ? AppStrings.protectionHintOn : AppStrings.protectionHintOff;
+    return Text(
+      text,
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700),
     );
   }
 
@@ -263,6 +291,14 @@ class _HomePageState extends State<HomePage> {
                     ),
                   )
                   .toList(),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _modeDescription(currentMode),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: Colors.grey.shade700, fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -323,34 +359,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildRecentPreview(BuildContext context) {
-    final entries = widget.controller.stats.recent;
-    if (entries.isEmpty) {
-      if (widget.controller.stats.blockedCount == 0) {
-        return const Text(AppStrings.nothingBlocked);
-      }
-      return const Text(AppStrings.noRecentBlocks);
-    }
-
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            AppStrings.recentPreview.replaceFirst('%d', entries.length.toString()),
-            style: Theme.of(context)
-                .textTheme
-                .bodyLarge
-                ?.copyWith(fontWeight: FontWeight.w600),
-          ),
-        ),
-        TextButton(
-          onPressed: () => _goToStats(context),
-          child: const Text(AppStrings.details),
-        ),
-      ],
-    );
-  }
-
   String _modeLabel(ProtectionMode mode) {
     switch (mode) {
       case ProtectionMode.light:
@@ -359,6 +367,17 @@ class _HomePageState extends State<HomePage> {
         return AppStrings.protectionModeStandard;
       case ProtectionMode.strict:
         return AppStrings.protectionModeStrict;
+    }
+  }
+
+  String _modeDescription(ProtectionMode mode) {
+    switch (mode) {
+      case ProtectionMode.light:
+        return AppStrings.protectionModeHintLight;
+      case ProtectionMode.standard:
+        return AppStrings.protectionModeHintStandard;
+      case ProtectionMode.strict:
+        return AppStrings.protectionModeHintStrict;
     }
   }
 }

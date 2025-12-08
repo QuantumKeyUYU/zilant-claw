@@ -41,6 +41,11 @@ class _StatsPageState extends State<StatsPage> {
     setState(() => _isRefreshing = false);
   }
 
+  Future<void> _clearRecent() async {
+    await widget.controller.clearRecentBlocks();
+    await widget.controller.refreshStats();
+  }
+
   @override
   Widget build(BuildContext context) {
     final stats = widget.controller.stats;
@@ -50,17 +55,21 @@ class _StatsPageState extends State<StatsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(AppStrings.statsPageTitle),
+        title: const Text(AppStrings.statsHeaderTitle),
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            _buildStatusCard(context, isRunning),
-            const SizedBox(height: 12),
-            _buildCounters(context, stats.blockedCount, stats.sessionBlocked),
-            const SizedBox(height: 20),
+            _buildStatusCard(
+              context,
+              isRunning,
+              stats.blockedCount,
+              stats.sessionBlocked,
+              stats.failOpenActive,
+            ),
+            const SizedBox(height: 16),
             Text(
               AppStrings.recentTitle,
               style: Theme.of(context)
@@ -70,17 +79,34 @@ class _StatsPageState extends State<StatsPage> {
             ),
             const SizedBox(height: 8),
             _buildRecentList(context),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: _clearRecent,
+                icon: const Icon(Icons.cleaning_services_outlined),
+                label: const Text(AppStrings.clearRecent),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatusCard(BuildContext context, bool isRunning) {
+  Widget _buildStatusCard(BuildContext context, bool isRunning, int blocked,
+      int sessionBlocked, bool failOpenActive) {
     final icon = isRunning ? Icons.shield : Icons.shield_outlined;
     final iconColor = isRunning ? Colors.green : Colors.blueGrey;
     final statusText = isRunning ? AppStrings.vpnActive : AppStrings.vpnInactive;
     final modeText = AppStrings.modeStatus.replaceFirst('%s', _modeLabel(widget.controller.mode));
+    final filterText = failOpenActive
+        ? AppStrings.filterStatusFailOpen
+        : AppStrings.filterStatusActive;
+    final filterStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: failOpenActive ? Colors.orange.shade700 : Colors.green.shade700,
+          fontWeight: FontWeight.w600,
+        );
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -90,25 +116,27 @@ class _StatsPageState extends State<StatsPage> {
           children: [
             Icon(icon, color: iconColor),
             const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    statusText,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    modeText,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
-              ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  statusText,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  modeText,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 2),
+                Text(filterText, style: filterStyle),
+              ],
             ),
+          ),
             if (_isRefreshing)
               const SizedBox(
                 height: 22,
@@ -117,29 +145,21 @@ class _StatsPageState extends State<StatsPage> {
               ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildCounters(BuildContext context, int blocked, int sessionBlocked) {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
+        const SizedBox(height: 8),
+        Row(
           children: [
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(AppStrings.totalLabel,
+                  Text(AppStrings.sessionLabel,
                       style: Theme.of(context).textTheme.labelMedium),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
-                    '$blocked',
+                    '$sessionBlocked',
                     style: Theme.of(context)
                         .textTheme
-                        .headlineSmall
+                        .titleLarge
                         ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ],
@@ -149,14 +169,14 @@ class _StatsPageState extends State<StatsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(AppStrings.sessionLabel,
+                  Text(AppStrings.totalLabel,
                       style: Theme.of(context).textTheme.labelMedium),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
-                    '$sessionBlocked',
+                    '$blocked',
                     style: Theme.of(context)
                         .textTheme
-                        .headlineSmall
+                        .titleLarge
                         ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ],
@@ -174,9 +194,7 @@ class _StatsPageState extends State<StatsPage> {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Text(
-          widget.controller.stats.blockedCount == 0
-              ? AppStrings.nothingBlocked
-              : AppStrings.noRecentBlocks,
+          AppStrings.recentEmpty,
         ),
       );
     }
