@@ -8,18 +8,21 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val channel = "digital_defender/protection"
     private val statsChannel = "digital_defender/stats"
+    private val eventsChannel = "digital_defender/protection_events"
     private val vpnRequestCode = 42
 
     private var pendingResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ProtectionController.init(this)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -45,6 +48,17 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, eventsChannel)
+            .setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    ProtectionController.setEventSink(events)
+                }
+
+                override fun onCancel(arguments: Any?) {
+                    ProtectionController.setEventSink(null)
+                }
+            })
     }
 
     private fun startVpn(result: MethodChannel.Result) {
@@ -73,10 +87,7 @@ class MainActivity : FlutterActivity() {
 
     private fun stopVpn(result: MethodChannel.Result) {
         try {
-            val stopIntent = Intent(this, DigitalDefenderVpnService::class.java).apply {
-                action = DigitalDefenderVpnService.ACTION_STOP
-            }
-            startService(stopIntent)
+            ProtectionController.stopProtection()
             result.success(null)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to stop VPN service", e)
@@ -89,10 +100,7 @@ class MainActivity : FlutterActivity() {
         try {
             val requested = call.argument<String>("mode") ?: DomainBlocklist.MODE_STANDARD
             val appliedMode = DomainBlocklist.setProtectionMode(this, requested)
-            val intent = Intent(this, DigitalDefenderVpnService::class.java).apply {
-                action = DigitalDefenderVpnService.ACTION_APPLY_PROTECTION_MODE
-            }
-            ContextCompat.startForegroundService(this, intent)
+            ProtectionController.applyProtectionMode()
             showToast(getString(R.string.protection_mode_changed, modeLabel(appliedMode)))
             result.success(appliedMode)
         } catch (e: Exception) {
@@ -119,9 +127,8 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun startVpnService() {
-        val intent = Intent(this, DigitalDefenderVpnService::class.java)
-        Log.d(TAG, "Starting DigitalDefenderVpnService")
-        ContextCompat.startForegroundService(this, intent)
+        Log.d(TAG, "Starting DigitalDefenderVpnService via ProtectionController")
+        ProtectionController.startProtection()
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

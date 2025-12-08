@@ -82,10 +82,9 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final state = widget.controller.state;
     final stats = widget.controller.stats;
-    final isOn =
-        stats.isRunning || state == ProtectionState.on || state == ProtectionState.turningOn;
+    final isOn = state == ProtectionState.on || state == ProtectionState.reconnecting;
     final failOpenActive = stats.failOpenActive;
-    final isBusy = state == ProtectionState.turningOn || state == ProtectionState.turningOff;
+    final isBusy = widget.controller.isCommandInFlight || state == ProtectionState.starting;
 
     return Scaffold(
       appBar: AppBar(
@@ -99,7 +98,7 @@ class _HomePageState extends State<HomePage> {
           children: [
             _buildProtectionCard(context, isOn, isBusy, state, failOpenActive),
             const SizedBox(height: 8),
-            _buildProtectionHint(isOn),
+            _buildProtectionHint(state),
             const SizedBox(height: 16),
             _buildModeSelector(context),
             const SizedBox(height: 16),
@@ -129,35 +128,8 @@ class _HomePageState extends State<HomePage> {
     final errorMessage = widget.controller.errorMessage;
     final needsPermission = widget.controller.errorCode == 'denied';
 
-    String title;
-    switch (state) {
-      case ProtectionState.turningOn:
-        title = AppStrings.protectionTurningOn;
-        break;
-      case ProtectionState.turningOff:
-        title = AppStrings.protectionTurningOff;
-        break;
-      case ProtectionState.error:
-        title = AppStrings.protectionUnknown;
-        break;
-      default:
-        title = isOn ? AppStrings.protectionEnabled : AppStrings.protectionDisabled;
-    }
-
-    String subtitle;
-    switch (state) {
-      case ProtectionState.turningOn:
-        subtitle = AppStrings.progressTurningOn;
-        break;
-      case ProtectionState.turningOff:
-        subtitle = AppStrings.progressTurningOff;
-        break;
-      case ProtectionState.error:
-        subtitle = errorMessage ?? AppStrings.progressError;
-        break;
-      default:
-        subtitle = isOn ? AppStrings.vpnActive : AppStrings.vpnInactive;
-    }
+    final title = _titleForState(state, isOn);
+    final subtitle = _subtitleForState(state, errorMessage, isOn);
 
     return Card(
       color: Colors.blueGrey.shade900,
@@ -182,6 +154,8 @@ class _HomePageState extends State<HomePage> {
                             ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 6),
+                      _StateIndicator(state: state),
+                      const SizedBox(height: 6),
                       Text(
                         subtitle,
                         style: Theme.of(context)
@@ -196,7 +170,7 @@ class _HomePageState extends State<HomePage> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Switch.adaptive(
-                      value: isOn,
+                      value: isOn || state == ProtectionState.starting,
                       onChanged: isBusy ? null : (_) => _toggleProtection(),
                       activeColor: Colors.greenAccent,
                     ),
@@ -254,8 +228,22 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildProtectionHint(bool isOn) {
-    final text = isOn ? AppStrings.protectionHintOn : AppStrings.protectionHintOff;
+  Widget _buildProtectionHint(ProtectionState state) {
+    final text = () {
+      switch (state) {
+        case ProtectionState.on:
+          return AppStrings.protectionHintOn;
+        case ProtectionState.reconnecting:
+          return AppStrings.protectionHintReconnecting;
+        case ProtectionState.starting:
+          return AppStrings.progressTurningOn;
+        case ProtectionState.error:
+          return AppStrings.protectionHintError;
+        case ProtectionState.off:
+        default:
+          return AppStrings.protectionHintOff;
+      }
+    }();
     return Text(
       text,
       style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700),
@@ -379,5 +367,94 @@ class _HomePageState extends State<HomePage> {
       case ProtectionMode.strict:
         return AppStrings.protectionModeHintStrict;
     }
+  }
+
+  String _titleForState(ProtectionState state, bool isOn) {
+    switch (state) {
+      case ProtectionState.starting:
+        return AppStrings.protectionTurningOn;
+      case ProtectionState.reconnecting:
+        return AppStrings.protectionReconnecting;
+      case ProtectionState.error:
+        return AppStrings.protectionUnknown;
+      case ProtectionState.on:
+      case ProtectionState.off:
+      default:
+        return isOn ? AppStrings.protectionEnabled : AppStrings.protectionDisabled;
+    }
+  }
+
+  String _subtitleForState(
+    ProtectionState state,
+    String? errorMessage,
+    bool isOn,
+  ) {
+    switch (state) {
+      case ProtectionState.starting:
+        return AppStrings.progressTurningOn;
+      case ProtectionState.reconnecting:
+        return AppStrings.protectionReconnectingHint;
+      case ProtectionState.error:
+        return errorMessage ?? AppStrings.progressError;
+      case ProtectionState.on:
+      case ProtectionState.off:
+      default:
+        return isOn ? AppStrings.vpnActive : AppStrings.vpnInactive;
+    }
+  }
+}
+
+class _StateIndicator extends StatelessWidget {
+  const _StateIndicator({required this.state});
+
+  final ProtectionState state;
+
+  Color _colorForState() {
+    switch (state) {
+      case ProtectionState.on:
+        return Colors.greenAccent;
+      case ProtectionState.starting:
+      case ProtectionState.reconnecting:
+        return Colors.amberAccent;
+      case ProtectionState.error:
+        return Colors.redAccent;
+      case ProtectionState.off:
+      default:
+        return Colors.white70;
+    }
+  }
+
+  String _labelForState() {
+    switch (state) {
+      case ProtectionState.on:
+        return AppStrings.stateOn;
+      case ProtectionState.starting:
+        return AppStrings.stateStarting;
+      case ProtectionState.reconnecting:
+        return AppStrings.stateReconnecting;
+      case ProtectionState.error:
+        return AppStrings.stateError;
+      case ProtectionState.off:
+      default:
+        return AppStrings.stateOff;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.circle, size: 10, color: _colorForState()),
+        const SizedBox(width: 6),
+        Text(
+          _labelForState(),
+          style: Theme.of(context)
+              .textTheme
+              .labelMedium
+              ?.copyWith(color: Colors.white70, fontWeight: FontWeight.w600),
+        ),
+      ],
+    );
   }
 }
