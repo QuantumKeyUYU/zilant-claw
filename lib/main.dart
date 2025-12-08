@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'ui/home_page.dart';
 import 'ui/theme.dart';
 import 'logic/protection_controller.dart';
+import 'ui/strings.dart';
 
 void main() {
   runApp(const DigitalDefenderApp());
@@ -26,7 +27,7 @@ class _DigitalDefenderAppState extends State<DigitalDefenderApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Digital Defender',
+      title: AppStrings.title,
       theme: buildTheme(),
       home: HomePage(controller: _controller),
     );

@@ -2,4 +2,7 @@
     <string name="app_name">Digital Defender</string>
     <string name="vpn_channel_name">Digital Defender</string>
     <string name="vpn_channel_description">Дракон защищает тебя — VPN активен</string>
+    <string name="vpn_permission_denied">Не удалось включить защиту. Требуется разрешение на VPN.</string>
+    <string name="vpn_start_failed">Не удалось включить защиту. Возможно, уже запущен другой VPN.</string>
+    <string name="vpn_stop_failed">Не удалось корректно остановить защиту.</string>
 </resources>

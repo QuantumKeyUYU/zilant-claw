@@ -14,9 +14,11 @@ class ProtectionController extends ChangeNotifier {
 
   ProtectionState _state = ProtectionState.off;
   String? _errorMessage;
+  int _blockedCount = 0;
 
   ProtectionState get state => _state;
   String? get errorMessage => _errorMessage;
+  int get blockedCount => _blockedCount;
 
   Future<void> toggleProtection() async {
     switch (_state) {
@@ -41,19 +43,20 @@ class ProtectionController extends ChangeNotifier {
       _setError('Платформа не поддерживается на этом этапе.');
       return;
     }
-    _updateState(ProtectionState.turningOn);
-    try {
-      if (Platform.isAndroid) {
-        await _channel.invokeMethod('android_start_protection');
-      } else if (Platform.isWindows) {
-        await _channel.invokeMethod('windows_start_protection');
+      _updateState(ProtectionState.turningOn);
+      try {
+        if (Platform.isAndroid) {
+          await _channel.invokeMethod('android_start_protection');
+        } else if (Platform.isWindows) {
+          await _channel.invokeMethod('windows_start_protection');
+        }
+        _updateState(ProtectionState.on);
+        await refreshBlockedCount();
+      } on PlatformException catch (e) {
+        _setError(e.message ?? 'Ошибка платформы.');
+      } catch (_) {
+        _setError('Не удалось включить защиту. Проверь разрешения VPN.');
       }
-      _updateState(ProtectionState.on);
-    } on PlatformException catch (e) {
-      _setError(e.message ?? 'Ошибка платформы.');
-    } catch (_) {
-      _setError('Не удалось включить защиту. Проверь разрешения VPN.');
-    }
   }
 
   Future<void> turnOffProtection() async {
@@ -64,19 +67,39 @@ class ProtectionController extends ChangeNotifier {
       _setError('Платформа не поддерживается на этом этапе.');
       return;
     }
-    _updateState(ProtectionState.turningOff);
-    try {
-      if (Platform.isAndroid) {
-        await _channel.invokeMethod('android_stop_protection');
-      } else if (Platform.isWindows) {
-        await _channel.invokeMethod('windows_stop_protection');
+      _updateState(ProtectionState.turningOff);
+      try {
+        if (Platform.isAndroid) {
+          await _channel.invokeMethod('android_stop_protection');
+        } else if (Platform.isWindows) {
+          await _channel.invokeMethod('windows_stop_protection');
+        }
+        _updateState(ProtectionState.off);
+        await refreshBlockedCount();
+      } on PlatformException catch (e) {
+        _setError(e.message ?? 'Ошибка платформы.');
+      } catch (_) {
+        _setError('Не удалось выключить защиту.');
       }
-      _updateState(ProtectionState.off);
-    } on PlatformException catch (e) {
-      _setError(e.message ?? 'Ошибка платформы.');
-    } catch (_) {
-      _setError('Не удалось выключить защиту.');
+  }
+
+  Future<void> refreshBlockedCount() async {
+    if (!Platform.isAndroid) {
+      _blockedCount = 0;
+      notifyListeners();
+      return;
     }
+    try {
+      final result = await _channel.invokeMethod('android_get_blocked_count');
+      if (result is int) {
+        _blockedCount = result;
+      } else if (result is num) {
+        _blockedCount = result.toInt();
+      }
+    } catch (_) {
+      // Keep the last known value on errors to avoid spamming the UI.
+    }
+    notifyListeners();
   }
 
   void _updateState(ProtectionState newState) {
