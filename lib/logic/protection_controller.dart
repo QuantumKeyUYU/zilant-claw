@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 
 enum ProtectionState { off, turningOn, on, turningOff, error }
 
+enum ProtectionMode { light, standard, strict }
+
 class ProtectionController extends ChangeNotifier {
   ProtectionController();
 
@@ -20,12 +22,53 @@ class ProtectionController extends ChangeNotifier {
   String? _errorCode;
   ProtectionStats _stats = ProtectionStats.empty();
   String? _statsError;
+  ProtectionMode _mode = ProtectionMode.standard;
 
   ProtectionState get state => _state;
   String? get errorMessage => _errorMessage;
   String? get errorCode => _errorCode;
   ProtectionStats get stats => _stats;
   String? get statsError => _statsError;
+  ProtectionMode get mode => _mode;
+
+  Future<void> loadProtectionMode() async {
+    if (!Platform.isAndroid) {
+      return;
+    }
+    try {
+      final result = await _channel.invokeMethod<String>('getProtectionMode');
+      if (result != null) {
+        _mode = _stringToMode(result);
+        notifyListeners();
+      }
+    } catch (_) {
+      // keep existing mode
+    }
+  }
+
+  Future<void> setProtectionMode(ProtectionMode newMode) async {
+    if (!Platform.isAndroid) {
+      _mode = newMode;
+      notifyListeners();
+      return;
+    }
+    try {
+      final applied = await _channel.invokeMethod<String>(
+        'setProtectionMode',
+        {'mode': _modeToString(newMode)},
+      );
+      if (applied != null) {
+        _mode = _stringToMode(applied);
+      } else {
+        _mode = newMode;
+      }
+      _statsError = null;
+      await refreshStats();
+    } on PlatformException catch (e) {
+      _statsError = e.message ?? 'Не удалось сменить режим защиты.';
+      notifyListeners();
+    }
+  }
 
   Future<void> toggleProtection() async {
     switch (_state) {
@@ -103,6 +146,9 @@ class ProtectionController extends ChangeNotifier {
         final decoded = jsonDecode(result) as Map<String, dynamic>;
         _stats = ProtectionStats.fromJson(decoded);
         _statsError = null;
+        if (decoded['mode'] is String) {
+          _mode = _stringToMode(decoded['mode'] as String);
+        }
         _syncStateWithStats();
       }
     } catch (e) {
@@ -172,6 +218,29 @@ class ProtectionController extends ChangeNotifier {
       _state = ProtectionState.off;
     }
   }
+
+  ProtectionMode _stringToMode(String raw) {
+    switch (raw.toLowerCase()) {
+      case 'light':
+        return ProtectionMode.light;
+      case 'strict':
+        return ProtectionMode.strict;
+      case 'standard':
+      default:
+        return ProtectionMode.standard;
+    }
+  }
+
+  String _modeToString(ProtectionMode mode) {
+    switch (mode) {
+      case ProtectionMode.light:
+        return 'light';
+      case ProtectionMode.strict:
+        return 'strict';
+      case ProtectionMode.standard:
+        return 'standard';
+    }
+  }
 }
 
 class ProtectionStats {
@@ -180,18 +249,21 @@ class ProtectionStats {
     required this.sessionBlocked,
     required this.recent,
     required this.isRunning,
+    required this.mode,
   });
 
   final int blockedCount;
   final int sessionBlocked;
   final List<BlockedEntry> recent;
   final bool isRunning;
+  final ProtectionMode mode;
 
   factory ProtectionStats.empty() => const ProtectionStats(
         blockedCount: 0,
         sessionBlocked: 0,
         recent: [],
         isRunning: false,
+        mode: ProtectionMode.standard,
       );
 
   factory ProtectionStats.fromJson(Map<String, dynamic> json) {
@@ -222,11 +294,26 @@ class ProtectionStats {
     final runningRaw = json['running'];
     final isRunning = runningRaw is bool ? runningRaw : false;
 
+    final modeRaw = json['mode'];
+    final parsedMode = modeRaw is String
+        ? () {
+            switch (modeRaw.toLowerCase()) {
+              case 'light':
+                return ProtectionMode.light;
+              case 'strict':
+                return ProtectionMode.strict;
+              default:
+                return ProtectionMode.standard;
+            }
+          }()
+        : ProtectionMode.standard;
+
     return ProtectionStats(
       blockedCount: blockedCount,
       sessionBlocked: sessionBlocked,
       recent: recentEntries,
       isRunning: isRunning,
+      mode: parsedMode,
     );
   }
 }

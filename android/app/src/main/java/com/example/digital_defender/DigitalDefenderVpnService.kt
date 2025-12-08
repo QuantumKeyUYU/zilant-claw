@@ -48,11 +48,36 @@ class DigitalDefenderVpnService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            Log.i(TAG, "Stopping service via ACTION_STOP")
-            stopProtection()
-            stopSelf()
-            return START_NOT_STICKY
+        when (intent?.action) {
+            ACTION_STOP -> {
+                Log.i(TAG, "Stopping service via ACTION_STOP")
+                stopProtection()
+                stopSelf()
+                return START_NOT_STICKY
+            }
+
+            ACTION_APPLY_PROTECTION_MODE -> {
+                val wasRunning = preferences.getBoolean(KEY_PROTECTION_ENABLED, false)
+                Log.i(TAG, "Applying new protection mode; was running: $wasRunning")
+                if (wasRunning) {
+                    stopProtection()
+                }
+                blocklist.reloadForMode(this)
+                maybeRefreshBlocklist()
+                if (wasRunning) {
+                    return try {
+                        createNotificationChannel()
+                        startForeground(NOTIFICATION_ID, buildNotification())
+                        startProtection()
+                        START_STICKY
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to restart VPN after mode change", e)
+                        stopSelf()
+                        START_NOT_STICKY
+                    }
+                }
+                return START_NOT_STICKY
+            }
         }
 
         Log.d(TAG, "onStartCommand: starting foreground with type specialUse")
@@ -476,9 +501,9 @@ class DigitalDefenderVpnService : VpnService() {
         private const val KEY_LAST_BLOCKLIST_UPDATE = "last_blocklist_update"
         internal const val KEY_RECENT_BLOCKS = "recent_blocks"
         internal const val KEY_PROTECTION_ENABLED = "protection_enabled"
-        private const val BLOCKLIST_URL = "https://example.com/digital-defender/blocklist.txt" // TODO: replace with real URL
         private const val BLOCKLIST_REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000L
         const val ACTION_STOP = "com.example.digital_defender.STOP"
+        const val ACTION_APPLY_PROTECTION_MODE = "com.example.digital_defender.APPLY_PROTECTION_MODE"
 
         fun readBlockedCount(context: Context): Long {
             return DigitalDefenderStats.readBlockedCount(context)
@@ -511,14 +536,17 @@ class DigitalDefenderVpnService : VpnService() {
         }
 
         thread(name = "BlocklistRefresh", start = true) {
-            val succeeded = blocklist.refreshFromNetwork(this, BLOCKLIST_URL)
+            val succeeded = blocklist.refreshFromNetwork(this)
             val timestamp = System.currentTimeMillis()
             preferences.edit().putLong(KEY_LAST_BLOCKLIST_UPDATE, timestamp).apply()
-            if (succeeded) {
-                Log.i(TAG, "Blocklist refreshed from $BLOCKLIST_URL at $timestamp")
-            } else {
-                Log.w(TAG, "Blocklist refresh from $BLOCKLIST_URL failed at $timestamp; using existing list")
-            }
+            Log.i(
+                TAG,
+                if (succeeded) {
+                    "Blocklist refreshed for mode ${DomainBlocklist.getProtectionMode(this)} at $timestamp"
+                } else {
+                    "Blocklist refresh failed at $timestamp; using existing list"
+                }
+            )
         }
     }
 }
@@ -576,6 +604,7 @@ object DigitalDefenderStats {
         val blockedCount = prefs.getLong(DigitalDefenderVpnService.KEY_BLOCKED_COUNT, 0L)
         val sessionBlocked = prefs.getLong(DigitalDefenderVpnService.KEY_SESSION_BLOCKED_COUNT, 0L)
         val protectionEnabled = prefs.getBoolean(DigitalDefenderVpnService.KEY_PROTECTION_ENABLED, false)
+        val protectionMode = DomainBlocklist.getProtectionMode(context)
         val recent = loadRecent(prefs)
 
         val recentArray = JSONArray()
@@ -590,6 +619,7 @@ object DigitalDefenderStats {
         root.put("blockedCount", blockedCount)
         root.put("sessionBlocked", sessionBlocked)
         root.put("running", protectionEnabled)
+        root.put("mode", protectionMode)
         root.put("recent", recentArray)
         return root.toString()
     }

@@ -1,0 +1,36 @@
+# Sample blocklist for Digital Defender
+# Domains below are blocked along with their subdomains
+ads.google.com
+adservice.google.com
+doubleclick.net
+facebook.com
+instagram.com
+snapads.com
+app-measurement.com
+track.example.com
+tracker.example.org
+analytics.example.net
+metrics.apple.com
+ads.twitter.com
+ads.yahoo.com
+amazon-adsystem.com
+branch.io
+adjust.com
+kochava.com
+unity3d.com
+mixpanel.com
+scorecardresearch.com
+omniture.com
+newrelic.com
+cloudfront.net
+optimizely.com
+atdmt.com
+pixel.quantserve.com
+admob.com
+moatads.com
+chartbeat.com
+hotjar.com
+pingdom.net
+sentry.io
+bugsnag.com
+firebaseio.com

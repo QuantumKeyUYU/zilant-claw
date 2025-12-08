@@ -9,26 +9,42 @@ import java.util.Locale
 
 object DomainBlocklist {
     private const val TAG = "DomainBlocklist"
-    private const val ASSET_FILE = "blocklist.txt"
-    private const val LOCAL_FILE = "blocklist.txt"
+    const val PREFS_KEY_PROTECTION_MODE = "protection_mode"
+    const val MODE_LIGHT = "light"
+    const val MODE_STANDARD = "standard"
+    const val MODE_STRICT = "strict"
+    private const val DEFAULT_MODE = MODE_STANDARD
+    private const val BLOCKLIST_BASE_URL = "https://example.com/digital-defender/blocklist"
+    private val assetFiles = mapOf(
+        MODE_LIGHT to "blocklist_light.txt",
+        MODE_STANDARD to "blocklist_standard.txt",
+        MODE_STRICT to "blocklist_strict.txt"
+    )
+    private val localFiles = assetFiles
     private val domains = HashSet<String>()
     @Volatile
     private var initialized = false
+    @Volatile
+    private var initializedMode: String = DEFAULT_MODE
 
     @Synchronized
     fun init(context: Context) {
-        if (initialized && domains.isNotEmpty()) return
-        val loadedFromLocal = loadFromLocalFile(context)
-        val loadedFromAsset = if (!loadedFromLocal) loadFromAsset(context) else false
+        val mode = getProtectionMode(context)
+        if (initialized && domains.isNotEmpty() && initializedMode == mode) return
+        initializedMode = mode
+        val loadedFromLocal = loadFromLocalFile(context, mode)
+        val loadedFromAsset = if (!loadedFromLocal) loadFromAsset(context, mode) else false
 
         when {
-            loadedFromLocal -> Log.i(TAG, "Loaded ${domains.size} domains from local file $LOCAL_FILE")
-            loadedFromAsset -> Log.i(TAG, "Loaded ${domains.size} domains from assets/$ASSET_FILE")
+            loadedFromLocal -> Log.i(TAG, "Loaded ${domains.size} domains from local file ${localFiles[mode]}")
+            loadedFromAsset -> Log.i(TAG, "Loaded ${domains.size} domains from assets/${assetFiles[mode]}")
             else -> Log.w(TAG, "Failed to load blocklist; continuing with empty list")
         }
     }
 
-    fun refreshFromNetwork(context: Context, url: String): Boolean {
+    fun refreshFromNetwork(context: Context): Boolean {
+        val mode = getProtectionMode(context)
+        val url = blocklistUrlForMode(mode)
         try {
             val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
@@ -54,13 +70,15 @@ object DomainBlocklist {
                 return false
             }
 
-            context.openFileOutput(LOCAL_FILE, Context.MODE_PRIVATE).use { output ->
+            val localFile = localFiles[mode] ?: return false
+            context.openFileOutput(localFile, Context.MODE_PRIVATE).use { output ->
                 output.write(body.toByteArray())
             }
 
             synchronized(this) {
                 replaceDomains(parsed)
                 initialized = true
+                initializedMode = mode
                 Log.i(TAG, "Refreshed blocklist from $url, ${domains.size} domains")
             }
             return true
@@ -94,33 +112,96 @@ object DomainBlocklist {
     }
 
     @Synchronized
-    private fun loadFromLocalFile(context: Context): Boolean {
+    private fun loadFromLocalFile(context: Context, mode: String): Boolean {
+        val localFile = localFiles[mode] ?: return false
         return try {
-            val loaded = parseStream(context.openFileInput(LOCAL_FILE))
+            val loaded = parseStream(context.openFileInput(localFile))
             replaceDomains(loaded)
             initialized = true
+            initializedMode = mode
             Log.d(TAG, "Loaded ${loaded.size} domains from internal storage")
             true
         } catch (e: FileNotFoundException) {
-            Log.i(TAG, "Local blocklist $LOCAL_FILE not found; will fall back to assets")
+            if (mode == MODE_STANDARD && localFile != "blocklist.txt") {
+                return try {
+                    val legacyLoaded = parseStream(context.openFileInput("blocklist.txt"))
+                    replaceDomains(legacyLoaded)
+                    initialized = true
+                    initializedMode = mode
+                    Log.i(TAG, "Loaded ${legacyLoaded.size} domains from legacy local file blocklist.txt")
+                    true
+                } catch (_: Exception) {
+                    Log.i(TAG, "Local blocklist $localFile not found; will fall back to assets")
+                    false
+                }
+            }
+            Log.i(TAG, "Local blocklist $localFile not found; will fall back to assets")
             false
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to load blocklist from local file $LOCAL_FILE", e)
+            Log.w(TAG, "Failed to load blocklist from local file $localFile", e)
             false
         }
     }
 
     @Synchronized
-    private fun loadFromAsset(context: Context): Boolean {
+    private fun loadFromAsset(context: Context, mode: String): Boolean {
+        val assetFile = assetFiles[mode] ?: return false
         return try {
-            val loaded = parseStream(context.assets.open(ASSET_FILE))
+            val loaded = parseStream(context.assets.open(assetFile))
             replaceDomains(loaded)
             initialized = true
+            initializedMode = mode
             Log.d(TAG, "Loaded ${loaded.size} domains from assets")
             true
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to load blocklist from assets/$ASSET_FILE", e)
+            Log.w(TAG, "Failed to load blocklist from assets/$assetFile", e)
             false
+        }
+    }
+
+    fun getProtectionMode(context: Context): String {
+        val prefs = context.getSharedPreferences(DigitalDefenderVpnService.PREFS_NAME, Context.MODE_PRIVATE)
+        val stored = prefs.getString(PREFS_KEY_PROTECTION_MODE, null)
+        val normalized = normalizeMode(stored)
+        if (normalized != stored) {
+            prefs.edit().putString(PREFS_KEY_PROTECTION_MODE, normalized).apply()
+        }
+        return normalized
+    }
+
+    fun setProtectionMode(context: Context, requestedMode: String): String {
+        val normalized = normalizeMode(requestedMode)
+        val prefs = context.getSharedPreferences(DigitalDefenderVpnService.PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(PREFS_KEY_PROTECTION_MODE, normalized).apply()
+        synchronized(this) {
+            initialized = false
+            domains.clear()
+        }
+        return normalized
+    }
+
+    fun reloadForMode(context: Context) {
+        synchronized(this) {
+            initialized = false
+        }
+        init(context)
+    }
+
+    private fun blocklistUrlForMode(mode: String): String {
+        val suffix = when (mode) {
+            MODE_LIGHT -> MODE_LIGHT
+            MODE_STRICT -> MODE_STRICT
+            else -> MODE_STANDARD
+        }
+        return "$BLOCKLIST_BASE_URL-$suffix.txt"
+    }
+
+    private fun normalizeMode(requestedMode: String?): String {
+        return when (requestedMode?.lowercase(Locale.US)) {
+            MODE_LIGHT -> MODE_LIGHT
+            MODE_STRICT -> MODE_STRICT
+            MODE_STANDARD -> MODE_STANDARD
+            else -> DEFAULT_MODE
         }
     }
 

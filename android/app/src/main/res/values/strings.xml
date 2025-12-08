@@ -5,4 +5,8 @@
     <string name="vpn_permission_denied">Не удалось включить защиту. Требуется разрешение на VPN.</string>
     <string name="vpn_start_failed">Не удалось включить защиту. Возможно, уже запущен другой VPN.</string>
     <string name="vpn_stop_failed">Не удалось корректно остановить защиту.</string>
+    <string name="protection_mode_changed">Режим защиты: %1$s</string>
+    <string name="protection_mode_light">Лёгкий</string>
+    <string name="protection_mode_standard">Стандарт</string>
+    <string name="protection_mode_strict">Жёсткий</string>
 </resources>

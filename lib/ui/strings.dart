@@ -30,11 +30,12 @@ class AppStrings {
   static const String protectionUnknown = 'Статус защиты неизвестен';
   static const String vpnActive = 'VPN активен';
   static const String vpnInactive = 'VPN не запущен';
-  static const String totalBlocked = 'Всего заблокировано доменов';
-  static const String sessionBlocked = 'За текущую сессию';
+  static const String blockedCompact = 'Заблокировано: %s за сеанс / %s всего';
   static const String refreshStats = 'Обновить данные';
   static const String resetStats = 'Сбросить статистику';
+  static const String details = 'Подробнее';
   static const String recentTitle = 'Недавние заблокированные домены';
+  static const String recentPreview = 'Недавние заблокированные домены: %d (смотреть)';
   static const String nothingBlocked =
       'Пока ничего не заблокировано — вы в чистом интернете 😌';
   static const String noRecentBlocks = 'Нет свежих блокировок';
@@ -43,4 +44,13 @@ class AppStrings {
   static const String grantVpnPermission = 'Выдать разрешение';
   static const String retryStart = 'Попробовать ещё раз';
   static const String statsError = 'Не удалось обновить статистику.';
+  static const String statsPageTitle = 'Статистика и домены';
+  static const String protectionModeLabel = 'Режим защиты';
+  static const String protectionModeLight = 'Лёгкий';
+  static const String protectionModeStandard = 'Стандарт';
+  static const String protectionModeStrict = 'Жёсткий';
+  static const String protectionModeChanged = 'Режим защиты: %s';
+  static const String modeStatus = 'Режим: %s';
+  static const String totalLabel = 'Всего';
+  static const String sessionLabel = 'За сеанс';
 }
