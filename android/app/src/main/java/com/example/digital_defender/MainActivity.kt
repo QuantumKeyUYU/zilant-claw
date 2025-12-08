@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -26,6 +27,7 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "android_start_protection" -> startVpn(result)
                     "android_stop_protection" -> stopVpn(result)
+                    "android_get_blocked_count" -> getBlockedCount(result)
                     else -> result.notImplemented()
                 }
             }
@@ -40,16 +42,17 @@ class MainActivity : FlutterActivity() {
         val intent = VpnService.prepare(this)
         if (intent != null) {
             pendingResult = result
-            Log.i(TAG, "Requesting VPN permission")
+            Log.d(TAG, "Requesting VPN permission")
             startActivityForResult(intent, vpnRequestCode)
             return
         }
         try {
-            Log.i(TAG, "VPN permission already granted, starting service")
+            Log.d(TAG, "VPN permission already granted, starting service")
             startVpnService()
             result.success(null)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start VPN without permission dialog", e)
+            showToast(getString(R.string.vpn_start_failed))
             result.error("start_failed", "Failed to start VPN service: ${e.message}", null)
         }
     }
@@ -60,13 +63,15 @@ class MainActivity : FlutterActivity() {
             stopService(stopIntent)
             result.success(null)
         } catch (e: Exception) {
+            Log.e(TAG, "Failed to stop VPN service", e)
+            showToast(getString(R.string.vpn_stop_failed))
             result.error("stop_failed", "Failed to stop VPN service: ${e.message}", null)
         }
     }
 
     private fun startVpnService() {
         val intent = Intent(this, DigitalDefenderVpnService::class.java)
-        Log.i(TAG, "Starting DigitalDefenderVpnService")
+        Log.d(TAG, "Starting DigitalDefenderVpnService")
         ContextCompat.startForegroundService(this, intent)
     }
 
@@ -74,19 +79,37 @@ class MainActivity : FlutterActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == vpnRequestCode) {
             if (resultCode == RESULT_OK) {
-                Log.i(TAG, "VPN permission granted")
+                Log.d(TAG, "VPN permission granted")
                 try {
                     startVpnService()
                     pendingResult?.success(null)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to start VPN after permission granted", e)
+                    showToast(getString(R.string.vpn_start_failed))
                     pendingResult?.error("start_failed", "Failed to start VPN service: ${e.message}", null)
                 }
             } else {
                 Log.w(TAG, "VPN permission denied")
+                showToast(getString(R.string.vpn_permission_denied))
                 pendingResult?.error("denied", "VPN permission denied", null)
             }
             pendingResult = null
+        }
+    }
+
+    private fun getBlockedCount(result: MethodChannel.Result) {
+        try {
+            val count = DigitalDefenderVpnService.readBlockedCount(this)
+            result.success(count)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read blocked count", e)
+            result.error("read_failed", "Failed to read blocked count", null)
+        }
+    }
+
+    private fun showToast(message: String) {
+        runOnUiThread {
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
         }
     }
 

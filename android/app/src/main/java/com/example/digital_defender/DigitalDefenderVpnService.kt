@@ -3,7 +3,9 @@ package com.example.digital_defender
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -24,15 +26,19 @@ class DigitalDefenderVpnService : VpnService() {
     private var worker: DnsVpnWorker? = null
     private var running = false
     private lateinit var blocklist: DomainBlocklist
+    private lateinit var preferences: SharedPreferences
+    private var blockedCount: Long = 0
 
     override fun onCreate() {
         super.onCreate()
-        Log.i(TAG, "onCreate")
+        Log.d(TAG, "onCreate")
+        preferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         blocklist = DomainBlocklist.load(applicationContext)
+        blockedCount = readBlockedCount(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.i(TAG, "onStartCommand: starting foreground with type specialUse")
+        Log.d(TAG, "onStartCommand: starting foreground with type specialUse")
         return try {
             createNotificationChannel()
             startForeground(NOTIFICATION_ID, buildNotification())
@@ -53,7 +59,7 @@ class DigitalDefenderVpnService : VpnService() {
     }
 
     override fun onDestroy() {
-        Log.i(TAG, "onDestroy")
+        Log.d(TAG, "onDestroy")
         stopProtection()
         super.onDestroy()
     }
@@ -82,7 +88,7 @@ class DigitalDefenderVpnService : VpnService() {
 
     private fun startProtection() {
         if (vpnInterface != null && running) {
-            Log.i(TAG, "VPN already active")
+            Log.d(TAG, "VPN already active")
             return
         }
         try {
@@ -98,7 +104,7 @@ class DigitalDefenderVpnService : VpnService() {
                 Log.e(TAG, "Failed to establish VPN interface")
                 stopSelf()
             } else {
-                Log.i(TAG, "VPN interface established")
+                Log.d(TAG, "VPN interface established")
                 startWorker(vpnInterface!!)
             }
         } catch (e: Exception) {
@@ -121,7 +127,7 @@ class DigitalDefenderVpnService : VpnService() {
     }
 
     private fun stopProtection() {
-        Log.i(TAG, "Stopping protection")
+        Log.d(TAG, "Stopping protection")
         running = false
         try {
             worker?.stop()
@@ -242,6 +248,7 @@ class DigitalDefenderVpnService : VpnService() {
                 if (DEBUG_DNS) {
                     Log.d(TAG, "DNS query: $domain -> BLOCKED")
                 }
+                incrementBlockedCount()
                 sendBlockedResponse(packet, ihl, srcPort, destPort, dnsOffset, query.questionEnd)
             } else {
                 if (DEBUG_DNS) {
@@ -424,5 +431,18 @@ class DigitalDefenderVpnService : VpnService() {
         private const val NOTIFICATION_ID = 1
         private const val TAG = "DigitalDefenderVpnService"
         private const val DEBUG_DNS = false
+        private const val PREFS_NAME = "digital_defender_prefs"
+        private const val KEY_BLOCKED_COUNT = "blocked_count"
+
+        fun readBlockedCount(context: Context): Long {
+            return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getLong(KEY_BLOCKED_COUNT, 0L)
+        }
+    }
+
+    @Synchronized
+    private fun incrementBlockedCount() {
+        blockedCount += 1
+        preferences.edit().putLong(KEY_BLOCKED_COUNT, blockedCount).apply()
     }
 }

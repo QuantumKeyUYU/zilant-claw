@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../logic/protection_controller.dart';
+import 'protection_info_page.dart';
+import 'strings.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.controller});
@@ -12,15 +16,23 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  Timer? _refreshTimer;
+
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_onControllerChanged);
+    widget.controller.refreshBlockedCount();
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => widget.controller.refreshBlockedCount(),
+    );
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_onControllerChanged);
+    _refreshTimer?.cancel();
     super.dispose();
   }
 
@@ -35,8 +47,15 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Digital Defender'),
+        title: const Text(AppStrings.title),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            tooltip: AppStrings.infoTitle,
+            onPressed: () => _openInfoPage(context),
+          )
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -61,6 +80,11 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             const SizedBox(height: 24),
+            _buildPoweredBy(context),
+            const SizedBox(height: 8),
+            _buildBlockedCount(context),
+            const SizedBox(height: 8),
+            _buildInfoButton(context),
           ],
         ),
       ),
@@ -192,20 +216,20 @@ class _HomePageState extends State<HomePage> {
     String text;
     switch (state) {
       case ProtectionState.on:
-        text = 'Дракон охраняет тебя. Защита включена.';
+        text = AppStrings.protectionOn;
         break;
       case ProtectionState.turningOn:
-        text = 'Включаем защиту…';
+        text = AppStrings.protectionTurningOn;
         break;
       case ProtectionState.turningOff:
-        text = 'Выключаем защиту…';
+        text = AppStrings.protectionTurningOff;
         break;
       case ProtectionState.error:
-        text = 'Произошла ошибка. Защита не включена.';
+        text = AppStrings.protectionError;
         break;
       case ProtectionState.off:
       default:
-        text = 'Дракон отдыхает. Защита выключена.';
+        text = AppStrings.protectionOff;
         break;
     }
     return Text(
@@ -221,13 +245,53 @@ class _HomePageState extends State<HomePage> {
   Widget _buildProgressText(ProtectionState state) {
     switch (state) {
       case ProtectionState.turningOn:
-        return const Text('Запрашиваем доступ к VPN и поднимаем защиту...');
+        return const Text(AppStrings.progressTurningOn);
       case ProtectionState.turningOff:
-        return const Text('Останавливаем защиту и закрываем VPN...');
+        return const Text(AppStrings.progressTurningOff);
       case ProtectionState.error:
-        return const Text('Проверьте разрешения VPN или повторите попытку.');
+        return const Text(AppStrings.progressError);
       default:
         return const SizedBox.shrink();
     }
+  }
+
+  Widget _buildPoweredBy(BuildContext context) {
+    return Text(
+      AppStrings.poweredBy,
+      textAlign: TextAlign.center,
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.white.withOpacity(0.6),
+          ),
+    );
+  }
+
+  Widget _buildBlockedCount(BuildContext context) {
+    final count = widget.controller.blockedCount;
+    return Text(
+      '${AppStrings.blockedRequestsLabel}$count',
+      textAlign: TextAlign.center,
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.white.withOpacity(0.65),
+          ),
+    );
+  }
+
+  Widget _buildInfoButton(BuildContext context) {
+    return TextButton(
+      onPressed: () => _openInfoPage(context),
+      style: TextButton.styleFrom(
+        foregroundColor: Colors.white70,
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(0, 0),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: const Text(AppStrings.protectionInfoLink),
+    );
+  }
+
+  void _openInfoPage(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ProtectionInfoPage()),
+    );
   }
 }
