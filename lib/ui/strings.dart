@@ -5,13 +5,13 @@ class AppStrings {
   static const String protectionInfoLink = 'Как работает защита?';
   static const String protectionOn = 'Дракон охраняет тебя. Защита включена.';
   static const String protectionTurningOn = 'Включаем защиту…';
-  static const String protectionTurningOff = 'Выключаем защиту…';
+  static const String protectionReconnecting = 'Переподключаем защиту…';
   static const String protectionError = 'Произошла ошибка. Защита не включена.';
   static const String protectionOff = 'Дракон отдыхает. Защита выключена.';
   static const String progressTurningOn =
       'Запрашиваем доступ к VPN и поднимаем защиту...';
-  static const String progressTurningOff =
-      'Останавливаем защиту и закрываем VPN...';
+  static const String protectionReconnectingHint =
+      'Тоннель перезапускается для стабильной работы.';
   static const String progressError =
       'Проверьте разрешения VPN или повторите попытку.';
   static const String infoTitle = 'Как это работает и как мы защищаем';
@@ -32,6 +32,10 @@ class AppStrings {
   static const String vpnInactive = 'VPN не запущен';
   static const String protectionHintOn =
       'Мы блокируем трекеры и лишнюю аналитику из списка.';
+  static const String protectionHintReconnecting =
+      'Мы восстанавливаем туннель, защита скоро вернётся.';
+  static const String protectionHintError =
+      'Произошла ошибка. Повторите попытку или проверьте разрешения VPN.';
   static const String protectionHintOff = 'Трафик идёт напрямую — без фильтра.';
   static const String protectionFailOpenWarning =
       'Фильтр временно ослаблен — DNS не отвечает, чтобы не ломать интернет мы пропускаем трафик без блокировки.';
@@ -71,4 +75,10 @@ class AppStrings {
   static const String statsHeaderTitle = 'Статистика и домены';
   static const String recentEmpty =
       'Пока ничего не заблокировано — вы в чистом интернете 😌';
+
+  static const String stateOn = 'Активна';
+  static const String stateStarting = 'Запускается';
+  static const String stateReconnecting = 'Переподключение';
+  static const String stateError = 'Ошибка';
+  static const String stateOff = 'Выключена';
 }

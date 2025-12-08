@@ -55,6 +55,7 @@ class DigitalDefenderVpnService : VpnService() {
                 Log.i(TAG, "Stopping service via ACTION_STOP")
                 stopProtection()
                 stopSelf()
+                ProtectionController.onServiceStopped()
                 return START_NOT_STICKY
             }
 
@@ -71,9 +72,11 @@ class DigitalDefenderVpnService : VpnService() {
                         createNotificationChannel()
                         startForeground(NOTIFICATION_ID, buildNotification())
                         startProtection()
+                        ProtectionController.onServiceStarted()
                         START_STICKY
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to restart VPN after mode change", e)
+                        ProtectionController.onServiceError()
                         stopSelf()
                         START_NOT_STICKY
                     }
@@ -87,10 +90,12 @@ class DigitalDefenderVpnService : VpnService() {
             createNotificationChannel()
             startForeground(NOTIFICATION_ID, buildNotification())
             startProtection()
+            ProtectionController.onServiceStarted()
             START_STICKY
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start VPN service", e)
             stopProtection()
+            ProtectionController.onServiceError()
             stopSelf()
             START_NOT_STICKY
         }
@@ -106,6 +111,7 @@ class DigitalDefenderVpnService : VpnService() {
         Log.d(TAG, "onDestroy")
         stopProtection()
         setProtectionEnabled(false)
+        ProtectionController.onServiceStopped()
         super.onDestroy()
     }
 
@@ -152,6 +158,7 @@ class DigitalDefenderVpnService : VpnService() {
             if (vpnInterface == null) {
                 Log.e(TAG, "Failed to establish VPN interface")
                 setProtectionEnabled(false)
+                ProtectionController.onServiceError()
                 stopSelf()
             } else {
                 Log.d(TAG, "VPN interface established")
@@ -165,6 +172,7 @@ class DigitalDefenderVpnService : VpnService() {
             Log.e(TAG, "Error starting VPN", e)
             stopProtection()
             setProtectionEnabled(false)
+            ProtectionController.onServiceError()
             stopSelf()
         }
     }
@@ -197,6 +205,7 @@ class DigitalDefenderVpnService : VpnService() {
             resetSessionCounters()
             setProtectionEnabled(false)
             setFailOpenActive(false)
+            ProtectionController.onServiceStopped()
         }
     }
 
@@ -224,6 +233,7 @@ class DigitalDefenderVpnService : VpnService() {
             try {
                 while (active && running) {
                     try {
+                        ProtectionController.reportAlive()
                         val length = input.read(buffer)
                         if (length <= 0) continue
                         handlePacket(buffer, length)

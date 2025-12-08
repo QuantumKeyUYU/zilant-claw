@@ -1,21 +1,25 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-enum ProtectionState { off, turningOn, on, turningOff, error }
+enum ProtectionState { off, starting, on, reconnecting, error }
 
 enum ProtectionMode { light, standard, strict }
 
 class ProtectionController extends ChangeNotifier {
-  ProtectionController();
+  ProtectionController() {
+    _attachEventStream();
+  }
 
   static const MethodChannel _channel =
       MethodChannel('digital_defender/protection');
   static const MethodChannel _statsChannel =
       MethodChannel('digital_defender/stats');
+  static const EventChannel _eventsChannel =
+      EventChannel('digital_defender/protection_events');
 
   ProtectionState _state = ProtectionState.off;
   String? _errorMessage;
@@ -23,6 +27,8 @@ class ProtectionController extends ChangeNotifier {
   ProtectionStats _stats = ProtectionStats.empty();
   String? _statsError;
   ProtectionMode _mode = ProtectionMode.standard;
+  StreamSubscription<dynamic>? _eventSubscription;
+  bool _isCommandInFlight = false;
 
   ProtectionState get state => _state;
   String? get errorMessage => _errorMessage;
@@ -30,6 +36,7 @@ class ProtectionController extends ChangeNotifier {
   ProtectionStats get stats => _stats;
   String? get statsError => _statsError;
   ProtectionMode get mode => _mode;
+  bool get isCommandInFlight => _isCommandInFlight;
 
   Future<void> loadProtectionMode() async {
     if (!Platform.isAndroid) {
@@ -77,58 +84,65 @@ class ProtectionController extends ChangeNotifier {
         await turnOnProtection();
         break;
       case ProtectionState.on:
+      case ProtectionState.reconnecting:
         await turnOffProtection();
         break;
-      case ProtectionState.turningOn:
-      case ProtectionState.turningOff:
+      case ProtectionState.starting:
         break;
     }
   }
 
   Future<void> turnOnProtection() async {
-    if (_state != ProtectionState.off && _state != ProtectionState.error) {
-      return;
-    }
     if (!Platform.isAndroid && !Platform.isWindows) {
       _setError('Платформа не поддерживается на этом этапе.');
       return;
     }
-    _updateState(ProtectionState.turningOn);
+    if (_isCommandInFlight) return;
+    _markCommandStart();
     try {
       if (Platform.isAndroid) {
         await _channel.invokeMethod('android_start_protection');
       } else if (Platform.isWindows) {
         await _channel.invokeMethod('windows_start_protection');
+        _updateState(ProtectionState.on);
       }
-      _updateState(ProtectionState.on);
+      _clearError();
+      if (!Platform.isAndroid) {
+        _markCommandDone();
+      }
       await refreshStats();
     } on PlatformException catch (e) {
+      _markCommandDone();
       _setError(_mapPlatformError(e), code: e.code);
     } catch (_) {
+      _markCommandDone();
       _setError('Не удалось включить защиту. Проверь разрешения VPN.');
     }
   }
 
   Future<void> turnOffProtection() async {
-    if (_state != ProtectionState.on) {
-      return;
-    }
     if (!Platform.isAndroid && !Platform.isWindows) {
       _setError('Платформа не поддерживается на этом этапе.');
       return;
     }
-    _updateState(ProtectionState.turningOff);
+    if (_isCommandInFlight) return;
+    _markCommandStart();
     try {
       if (Platform.isAndroid) {
         await _channel.invokeMethod('android_stop_protection');
       } else if (Platform.isWindows) {
         await _channel.invokeMethod('windows_stop_protection');
+        _updateState(ProtectionState.off);
       }
-      _updateState(ProtectionState.off);
+      if (!Platform.isAndroid) {
+        _markCommandDone();
+      }
       await refreshStats();
     } on PlatformException catch (e) {
+      _markCommandDone();
       _setError(e.message ?? 'Ошибка платформы.', code: e.code);
     } catch (_) {
+      _markCommandDone();
       _setError('Не удалось выключить защиту.');
     }
   }
@@ -149,7 +163,6 @@ class ProtectionController extends ChangeNotifier {
         if (decoded['mode'] is String) {
           _mode = _stringToMode(decoded['mode'] as String);
         }
-        _syncStateWithStats();
       }
     } catch (e) {
       _statsError = 'Не удалось получить статистику. Попробуйте ещё раз.';
@@ -197,8 +210,9 @@ class ProtectionController extends ChangeNotifier {
 
   void _updateState(ProtectionState newState) {
     _state = newState;
-    _errorMessage = null;
-    _errorCode = null;
+    if (newState != ProtectionState.error) {
+      _clearError();
+    }
     notifyListeners();
   }
 
@@ -207,6 +221,11 @@ class ProtectionController extends ChangeNotifier {
     _errorMessage = message;
     _errorCode = code;
     notifyListeners();
+  }
+
+  void _clearError() {
+    _errorMessage = null;
+    _errorCode = null;
   }
 
   String _mapPlatformError(PlatformException e) {
@@ -220,25 +239,62 @@ class ProtectionController extends ChangeNotifier {
     }
   }
 
-  void _syncStateWithStats() {
-    final running = _stats.isRunning;
-    if (running && _state == ProtectionState.turningOn) {
-      _state = ProtectionState.on;
-      _errorMessage = null;
-      _errorCode = null;
-    } else if (!running && _state == ProtectionState.turningOff) {
-      _state = ProtectionState.off;
-    } else if (running && _state == ProtectionState.error) {
-      _state = ProtectionState.on;
-      _errorMessage = null;
-      _errorCode = null;
-    } else if (!running && _state == ProtectionState.error) {
-      _state = ProtectionState.off;
-    } else if (running && _state == ProtectionState.off) {
-      _state = ProtectionState.on;
-    } else if (!running && _state == ProtectionState.on) {
-      _state = ProtectionState.off;
+  void _attachEventStream() {
+    if (!Platform.isAndroid) return;
+    _eventSubscription = _eventsChannel.receiveBroadcastStream().listen(
+      _handleNativeState,
+      onError: (Object error) {
+        _statsError = 'Не удалось синхронизировать состояние защиты.';
+        notifyListeners();
+      },
+    );
+  }
+
+  void _handleNativeState(dynamic event) {
+    final mappedState = _mapNativeState(event);
+    if (mappedState == null) return;
+    _state = mappedState;
+    if (mappedState != ProtectionState.error) {
+      _clearError();
     }
+    _markCommandDone();
+    notifyListeners();
+  }
+
+  ProtectionState? _mapNativeState(dynamic raw) {
+    if (raw is! String) return null;
+    switch (raw.toUpperCase()) {
+      case 'OFF':
+        return ProtectionState.off;
+      case 'STARTING':
+        return ProtectionState.starting;
+      case 'ON':
+        return ProtectionState.on;
+      case 'ERROR':
+        return ProtectionState.error;
+      case 'RECONNECTING':
+        return ProtectionState.reconnecting;
+      default:
+        return null;
+    }
+  }
+
+  void _markCommandStart() {
+    _isCommandInFlight = true;
+    notifyListeners();
+  }
+
+  void _markCommandDone() {
+    if (_isCommandInFlight) {
+      _isCommandInFlight = false;
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _eventSubscription?.cancel();
+    super.dispose();
   }
 
   ProtectionMode _stringToMode(String raw) {
