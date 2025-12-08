@@ -32,11 +32,18 @@ class DigitalDefenderVpnService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.i(TAG, "onStartCommand")
-        createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification())
-        startProtection()
-        return START_STICKY
+        Log.i(TAG, "onStartCommand: starting foreground with type specialUse")
+        return try {
+            createNotificationChannel()
+            startForeground(NOTIFICATION_ID, buildNotification())
+            startProtection()
+            START_STICKY
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start VPN service", e)
+            stopProtection()
+            stopSelf()
+            START_NOT_STICKY
+        }
     }
 
     override fun onRevoke() {
