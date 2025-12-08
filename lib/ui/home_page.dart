@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../logic/protection_controller.dart';
-import 'protection_info_page.dart';
 import 'strings.dart';
 
 class HomePage extends StatefulWidget {
@@ -16,23 +15,18 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  Timer? _refreshTimer;
+  bool _isRefreshing = false;
 
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_onControllerChanged);
-    widget.controller.refreshBlockedCount();
-    _refreshTimer = Timer.periodic(
-      const Duration(seconds: 10),
-      (_) => widget.controller.refreshBlockedCount(),
-    );
+    unawaited(widget.controller.refreshStats());
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_onControllerChanged);
-    _refreshTimer?.cancel();
     super.dispose();
   }
 
@@ -40,171 +34,122 @@ class _HomePageState extends State<HomePage> {
     setState(() {});
   }
 
+  Future<void> _toggleProtection() async {
+    await widget.controller.toggleProtection();
+  }
+
+  Future<void> _refreshStats() async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+    await widget.controller.refreshStats();
+    setState(() => _isRefreshing = false);
+  }
+
+  Future<void> _resetStats() async {
+    await widget.controller.resetStats();
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = widget.controller.state;
+    final stats = widget.controller.stats;
     final isOn = state == ProtectionState.on;
+    final isBusy =
+        state == ProtectionState.turningOn || state == ProtectionState.turningOff;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text(AppStrings.title),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            tooltip: AppStrings.infoTitle,
-            onPressed: () => _openInfoPage(context),
-          )
-        ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
+      body: RefreshIndicator(
+        onRefresh: _refreshStats,
+        child: ListView(
+          padding: const EdgeInsets.all(24),
           children: [
-            const SizedBox(height: 32),
-            Expanded(child: Center(child: _buildDragon(isOn))),
-            const SizedBox(height: 24),
-            _buildToggle(context, state),
+            _buildProtectionCard(context, isOn, isBusy, state),
             const SizedBox(height: 16),
-            _buildStatusText(state),
+            _buildStatsCard(context, stats.blockedCount),
             const SizedBox(height: 12),
-            _buildProgressText(state),
-            if (state == ProtectionState.error &&
-                widget.controller.errorMessage != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8.0),
-                child: Text(
-                  widget.controller.errorMessage!,
-                  style: const TextStyle(color: Colors.redAccent),
-                ),
-              ),
+            _buildStatsActions(context),
             const SizedBox(height: 24),
-            _buildPoweredBy(context),
-            const SizedBox(height: 8),
-            _buildBlockedCount(context),
-            const SizedBox(height: 8),
-            _buildInfoButton(context),
+            _buildRecentHeader(context),
+            const SizedBox(height: 12),
+            _buildRecentList(context),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDragon(bool isOn) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeInOut,
-      height: 240,
-      width: 240,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: isOn
-              ? const [Color(0xFF3DBE8B), Color(0xFF6EE7B7)]
-              : const [Color(0xFF1F2A3E), Color(0xFF0E1525)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          if (isOn)
-            BoxShadow(
-              color: const Color(0xFF3DBE8B).withOpacity(0.4),
-              blurRadius: 32,
-              spreadRadius: 2,
-              offset: const Offset(0, 8),
-            ),
-        ],
-        border: Border.all(
-          color: isOn ? const Color(0xFF8FF2C9) : Colors.white24,
-          width: 2,
-        ),
-      ),
-      child: Center(
-        child: Text(
-          '🐉',
-          style: TextStyle(
-            fontSize: 96,
-            shadows: [
-              if (isOn)
-                const Shadow(
-                  offset: Offset(0, 0),
-                  blurRadius: 12,
-                  color: Color(0xCC8FF2C9),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildToggle(BuildContext context, ProtectionState state) {
-    final isBusy = state == ProtectionState.turningOn ||
-        state == ProtectionState.turningOff;
-    final isOn = state == ProtectionState.on;
-
-    return GestureDetector(
-      onTap: isBusy
-          ? null
-          : () async {
-              await widget.controller.toggleProtection();
-            },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        height: 120,
-        width: 220,
-        decoration: BoxDecoration(
-          color: isOn ? const Color(0xFF3DBE8B) : const Color(0xFF1F2A3E),
-          borderRadius: BorderRadius.circular(60),
-          boxShadow: isOn
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFF3DBE8B).withOpacity(0.35),
-                    blurRadius: 24,
-                    spreadRadius: 1,
-                    offset: const Offset(0, 6),
-                  )
-                ]
-              : null,
-        ),
-        child: Stack(
+  Widget _buildProtectionCard(
+    BuildContext context,
+    bool isOn,
+    bool isBusy,
+    ProtectionState state,
+  ) {
+    return Card(
+      color: Colors.blueGrey.shade900,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeInOut,
-              left: isOn ? 110 : 10,
-              top: 10,
-              bottom: 10,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                width: 100,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(50),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
-                      blurRadius: 12,
-                      offset: const Offset(0, 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isOn ? AppStrings.protectionEnabled : AppStrings.protectionDisabled,
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineSmall
+                          ?.copyWith(color: Colors.white),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      isOn ? AppStrings.vpnActive : AppStrings.vpnInactive,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: Colors.white70),
                     ),
                   ],
                 ),
-                child: Center(
-                  child: Icon(
-                    isOn ? Icons.shield : Icons.shield_outlined,
-                    color: isOn ? const Color(0xFF3DBE8B) : Colors.grey[600],
-                    size: 36,
-                  ),
+                Column(
+                  children: [
+                    Switch.adaptive(
+                      value: isOn,
+                      onChanged: (_) => _toggleProtection(),
+                      activeColor: Colors.greenAccent,
+                    ),
+                    if (isBusy)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation(
+                              isOn ? Colors.greenAccent : Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-              ),
+              ],
             ),
-            if (isBusy)
-              const Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  strokeWidth: 3,
-                ),
+            const SizedBox(height: 12),
+            if (state == ProtectionState.error &&
+                widget.controller.errorMessage != null)
+              Text(
+                widget.controller.errorMessage!,
+                style: const TextStyle(color: Colors.redAccent),
               ),
           ],
         ),
@@ -212,86 +157,122 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildStatusText(ProtectionState state) {
-    String text;
-    switch (state) {
-      case ProtectionState.on:
-        text = AppStrings.protectionOn;
-        break;
-      case ProtectionState.turningOn:
-        text = AppStrings.protectionTurningOn;
-        break;
-      case ProtectionState.turningOff:
-        text = AppStrings.protectionTurningOff;
-        break;
-      case ProtectionState.error:
-        text = AppStrings.protectionError;
-        break;
-      case ProtectionState.off:
-      default:
-        text = AppStrings.protectionOff;
-        break;
+  Widget _buildStatsCard(BuildContext context, int blockedCount) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            const Icon(Icons.shield, color: Colors.green),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    AppStrings.totalBlocked,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$blockedCount',
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+            if (_isRefreshing)
+              const SizedBox(
+                height: 28,
+                width: 28,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatsActions(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: _refreshStats,
+            icon: const Icon(Icons.refresh),
+            label: const Text(AppStrings.refreshStats),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _resetStats,
+            icon: const Icon(Icons.delete_outline),
+            label: const Text(AppStrings.resetStats),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecentHeader(BuildContext context) {
+    final error = widget.controller.statsError;
+    if (error != null) {
+      return Text(
+        error,
+        style: const TextStyle(color: Colors.redAccent),
+      );
     }
     return Text(
-      text,
-      textAlign: TextAlign.center,
+      AppStrings.recentTitle,
       style: Theme.of(context)
           .textTheme
-          .headlineSmall
-          ?.copyWith(color: Colors.white),
+          .titleMedium
+          ?.copyWith(fontWeight: FontWeight.w600),
     );
   }
 
-  Widget _buildProgressText(ProtectionState state) {
-    switch (state) {
-      case ProtectionState.turningOn:
-        return const Text(AppStrings.progressTurningOn);
-      case ProtectionState.turningOff:
-        return const Text(AppStrings.progressTurningOff);
-      case ProtectionState.error:
-        return const Text(AppStrings.progressError);
-      default:
-        return const SizedBox.shrink();
+  Widget _buildRecentList(BuildContext context) {
+    final entries = widget.controller.stats.recent.take(20).toList();
+    if (entries.isEmpty) {
+      if (widget.controller.stats.blockedCount == 0) {
+        return const Text(AppStrings.nothingBlocked);
+      }
+      return const Text(AppStrings.noRecentBlocks);
     }
-  }
 
-  Widget _buildPoweredBy(BuildContext context) {
-    return Text(
-      AppStrings.poweredBy,
-      textAlign: TextAlign.center,
-      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.white.withOpacity(0.6),
-          ),
+    return Column(
+      children: entries
+          .map(
+            (entry) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.public),
+              title: Text(entry.domain, style: const TextStyle(fontSize: 16)),
+              subtitle: Text(_formatTimestamp(entry.timestamp)),
+            ),
+          )
+          .toList(),
     );
   }
 
-  Widget _buildBlockedCount(BuildContext context) {
-    final count = widget.controller.blockedCount;
-    return Text(
-      '${AppStrings.blockedRequestsLabel}$count',
-      textAlign: TextAlign.center,
-      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.white.withOpacity(0.65),
-          ),
-    );
+  String _formatTimestamp(DateTime timestamp) {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+
+    if (difference.inDays >= 1) {
+      final dayLabel = difference.inDays == 1
+          ? AppStrings.yesterday
+          : '${difference.inDays} ${AppStrings.daysAgoSuffix}';
+      final time = _twoDigits(timestamp.hour) + ':' + _twoDigits(timestamp.minute);
+      return '$dayLabel $time';
+    }
+
+    return '${_twoDigits(timestamp.hour)}:${_twoDigits(timestamp.minute)}';
   }
 
-  Widget _buildInfoButton(BuildContext context) {
-    return TextButton(
-      onPressed: () => _openInfoPage(context),
-      style: TextButton.styleFrom(
-        foregroundColor: Colors.white70,
-        padding: EdgeInsets.zero,
-        minimumSize: const Size(0, 0),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      child: const Text(AppStrings.protectionInfoLink),
-    );
-  }
-
-  void _openInfoPage(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ProtectionInfoPage()),
-    );
-  }
+  String _twoDigits(int value) => value.toString().padLeft(2, '0');
 }
