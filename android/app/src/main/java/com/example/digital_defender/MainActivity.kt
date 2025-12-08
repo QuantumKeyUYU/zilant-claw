@@ -45,9 +45,11 @@ class MainActivity : FlutterActivity() {
             return
         }
         try {
+            Log.i(TAG, "VPN permission already granted, starting service")
             startVpnService()
             result.success(null)
         } catch (e: Exception) {
+            Log.e(TAG, "Failed to start VPN without permission dialog", e)
             result.error("start_failed", "Failed to start VPN service: ${e.message}", null)
         }
     }
@@ -64,6 +66,7 @@ class MainActivity : FlutterActivity() {
 
     private fun startVpnService() {
         val intent = Intent(this, DigitalDefenderVpnService::class.java)
+        Log.i(TAG, "Starting DigitalDefenderVpnService")
         ContextCompat.startForegroundService(this, intent)
     }
 
@@ -72,8 +75,13 @@ class MainActivity : FlutterActivity() {
         if (requestCode == vpnRequestCode) {
             if (resultCode == RESULT_OK) {
                 Log.i(TAG, "VPN permission granted")
-                startVpnService()
-                pendingResult?.success(null)
+                try {
+                    startVpnService()
+                    pendingResult?.success(null)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to start VPN after permission granted", e)
+                    pendingResult?.error("start_failed", "Failed to start VPN service: ${e.message}", null)
+                }
             } else {
                 Log.w(TAG, "VPN permission denied")
                 pendingResult?.error("denied", "VPN permission denied", null)
