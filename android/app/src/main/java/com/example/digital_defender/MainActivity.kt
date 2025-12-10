@@ -121,6 +121,7 @@ class MainActivity : FlutterActivity() {
     private fun modeLabel(mode: String): String {
         return when (mode.lowercase()) {
             DomainBlocklist.MODE_STRICT -> getString(R.string.protection_mode_strict)
+            DomainBlocklist.MODE_ULTRA -> getString(R.string.protection_mode_ultra)
             else -> getString(R.string.protection_mode_standard)
         }
     }

@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 
 enum ProtectionState { off, starting, on, reconnecting, error }
 
-enum ProtectionMode { standard, advanced }
+enum ProtectionMode { standard, advanced, ultra }
 
 class ProtectionController extends ChangeNotifier {
   ProtectionController() {
@@ -302,6 +302,8 @@ class ProtectionController extends ChangeNotifier {
       case 'strict':
       case 'advanced':
         return ProtectionMode.advanced;
+      case 'ultra':
+        return ProtectionMode.ultra;
       case 'standard':
       default:
         return ProtectionMode.standard;
@@ -312,6 +314,8 @@ class ProtectionController extends ChangeNotifier {
     switch (mode) {
       case ProtectionMode.advanced:
         return 'strict';
+      case ProtectionMode.ultra:
+        return 'ultra';
       case ProtectionMode.standard:
         return 'standard';
     }
@@ -351,6 +355,8 @@ class ProtectionStats {
     switch (mode) {
       case ProtectionMode.advanced:
         return 'Advanced';
+      case ProtectionMode.ultra:
+        return 'ULTRA';
       case ProtectionMode.standard:
       default:
         return 'Standard';
@@ -405,6 +411,8 @@ class ProtectionStats {
               case 'strict':
               case 'advanced':
                 return ProtectionMode.advanced;
+              case 'ultra':
+                return ProtectionMode.ultra;
               default:
                 return ProtectionMode.standard;
             }
