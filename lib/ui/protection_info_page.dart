@@ -13,7 +13,7 @@ class ProtectionInfoPage extends StatelessWidget {
     final bodyStyle = Theme.of(context).textTheme.bodyMedium;
     return Scaffold(
       appBar: AppBar(
-        title: const Text(AppStrings.info.title),
+        title: Text(AppStrings.info.title),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).maybePop(),
@@ -54,7 +54,7 @@ class ProtectionInfoPage extends StatelessWidget {
             const SizedBox(height: 12),
             _InfoSection(
               title: AppStrings.info.hardwareTitle,
-              items: const [
+              items: [
                 AppStrings.info.hardware1,
                 AppStrings.info.hardware2,
                 AppStrings.info.hardware3,
@@ -62,7 +62,7 @@ class ProtectionInfoPage extends StatelessWidget {
             ),
             _InfoSection(
               title: AppStrings.info.networkTitle,
-              items: const [
+              items: [
                 AppStrings.info.network1,
                 AppStrings.info.network2,
                 AppStrings.info.network3,
@@ -70,7 +70,7 @@ class ProtectionInfoPage extends StatelessWidget {
             ),
             _InfoSection(
               title: AppStrings.info.permissionsTitle,
-              items: const [
+              items: [
                 AppStrings.info.permissions1,
                 AppStrings.info.permissions2,
                 AppStrings.info.permissions3,
@@ -78,7 +78,7 @@ class ProtectionInfoPage extends StatelessWidget {
             ),
             _InfoSection(
               title: AppStrings.info.uxTitle,
-              items: const [
+              items: [
                 AppStrings.info.ux1,
                 AppStrings.info.ux2,
                 AppStrings.info.ux3,
@@ -86,7 +86,7 @@ class ProtectionInfoPage extends StatelessWidget {
             ),
             _InfoSection(
               title: AppStrings.info.supplyTitle,
-              items: const [
+              items: [
                 AppStrings.info.supply1,
                 AppStrings.info.supply2,
                 AppStrings.info.supply3,
