@@ -398,8 +398,11 @@ object DomainBlocklist {
 
     private fun isAllowedEntry(domain: String, data: BlocklistData): Boolean {
         if (data.allowExact.contains(domain)) return true
-        if (defaultAllowlist.contains(domain)) return true
         if (data.allowSuffixes.contains(domain)) return true
+
+        // Built-in allowlist is only applied in standard mode for backward compatibility.
+        if (data.mode == MODE_STANDARD && defaultAllowlist.contains(domain)) return true
+
         return false
     }
 

@@ -82,7 +82,7 @@ class AppStrings {
   static const String protectionFailOpenWarning =
       'Фильтр временно ослаблен — DNS не отвечает, чтобы не ломать интернет мы пропускаем трафик без блокировки.';
   static const String strictModeWarning =
-      'В строгом режиме некоторые сайты могут не открываться — мы блокируем рискованные домены.';
+      'В строгом режиме некоторые сайты могут не открываться — мы блокируем рискованные домены. Если сайт не открывается или ведёт себя странно — попробуйте переключиться обратно в «Стандарт».';
   static const String blockedCompact = 'Заблокировано: %s за сеанс / %s всего';
   static const String refreshStats = 'Обновить данные';
   static const String resetStats = 'Сбросить статистику';
@@ -107,7 +107,7 @@ class AppStrings {
   static const String protectionModeHintStrict =
       'Максимальная агрессивность: может ломать отдельные сайты и приложения.';
   static const String strictModeActiveBanner =
-      'Строгая фильтрация включена: блокируются подозрительные домены полностью.';
+      'Строгая фильтрация включена: блокируются подозрительные домены полностью. Если сайт не открывается или ведёт себя странно — попробуйте переключиться обратно в «Стандарт».';
   static const String modeStatus = 'Режим: %s';
   static const String filterStatusActive = 'Фильтр активен';
   static const String filterStatusFailOpen =

@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.example.digital_defender.BuildConfig
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.FileInputStream
@@ -623,7 +624,7 @@ class DigitalDefenderVpnService : VpnService() {
         private const val CHANNEL_ID = "digital_defender_vpn"
         private const val NOTIFICATION_ID = 1
         internal const val TAG = "DigitalDefenderVpnService"
-        private const val DEBUG_DNS = false
+        private const val DEBUG_DNS = BuildConfig.DEBUG
         internal const val PREFS_NAME = "digital_defender_prefs"
         internal const val KEY_BLOCKED_COUNT = "blocked_count"
         internal const val KEY_SESSION_BLOCKED_COUNT = "session_blocked_count"
