@@ -90,6 +90,7 @@ class DigitalDefenderVpnService : VpnService() {
         return try {
             createNotificationChannel()
             startForeground(NOTIFICATION_ID, buildNotification())
+            Log.i(TAG, "Starting VPN with mode ${DomainBlocklist.getProtectionMode(this)}")
             startProtection()
             ProtectionController.onServiceStarted()
             START_STICKY

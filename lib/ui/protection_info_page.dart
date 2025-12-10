@@ -23,8 +23,11 @@ class ProtectionInfoPage extends StatelessWidget {
         padding: const EdgeInsets.all(20.0),
         child: ListView(
           children: [
-            if (mode == ProtectionMode.advanced) ...[
-              _StrictModeBanner(message: AppStrings.strictModeActiveBanner),
+            if (mode == ProtectionMode.advanced || mode == ProtectionMode.ultra) ...[
+              _StrictModeBanner(
+                  message: mode == ProtectionMode.ultra
+                      ? AppStrings.ultraModeActiveBanner
+                      : AppStrings.strictModeActiveBanner),
               const SizedBox(height: 12),
             ],
             Text(AppStrings.infoIntro, style: bodyStyle),
@@ -34,6 +37,8 @@ class ProtectionInfoPage extends StatelessWidget {
             Text(AppStrings.infoModeStandard, style: bodyStyle),
             const SizedBox(height: 8),
             Text(AppStrings.infoModeStrict, style: bodyStyle),
+            const SizedBox(height: 8),
+            Text(AppStrings.infoModeUltra, style: bodyStyle),
             const SizedBox(height: 12),
             Text(AppStrings.infoPrivacy, style: bodyStyle),
             const SizedBox(height: 12),

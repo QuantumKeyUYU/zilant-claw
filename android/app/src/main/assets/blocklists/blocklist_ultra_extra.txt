@@ -1,0 +1,114 @@
+# ULTRA extra blocklist (один домен в строке)
+
+# TikTok / Pinterest / Tumblr
+ads-api.tiktok.com
+ct.pinterest.com
+log.pinterest.com
+px.srvcs.tumblr.com
+
+# Samsung / Smartclip
+samsung-com.112.2o7.net
+config.samsungads.com
+smartclip.net
+
+# Affiliate / партнёрские сети
+www.anrdoezrs.net
+ad.linksynergy.com
+
+# Skimlinks / VigLink / Sovrn
+s.skimresources.com
+t.skimresources.com
+go.skimresources.com
+redirector.skimresources.com
+api.viglink.com
+redirect.viglink.com
+cdn.viglink.com
+
+# A/B-тесты и персонализация
+cdn.optimizely.com
+logx.optimizely.com
+cdn.dynamicyield.com
+
+# Email-маркетинг / трекинг / чаты
+list-manage.com
+track.hubspot.com
+munchkin.marketo.net
+trackcmp.net
+widget.intercom.io
+js.driftt.com
+
+# Google / JW Player / аналитика
+pixel.adsafeprotected.com
+www.google-analytics.com
+googletagmanager.com
+tagmanager.google.com
+dai.google.com
+g.jwpsrv.com
+ssl.p.jwpcdn.com
+
+# Mixpanel
+decide.mixpanel.com
+
+# Mail.ru
+top-fwz1.mail.ru
+
+# Apple OEM / аналитика
+books-analytics-events.apple.com
+
+# Платформы управления согласием / cookies
+geolocation.onetrust.com
+cookiebot.com
+consentcdn.cookiebot.com
+consent.trustarc.com
+
+# Oppo / Huawei / Xiaomi OEM-телеметрия
+data.ads.oppomobile.com
+metrics.data.hicloud.com
+logservice.hicloud.com
+logservice1.hicloud.com
+logbak.hicloud.com
+ads.huawei.com
+sdkconfig.ad.xiaomi.com
+
+# Index Exchange / Xandr / OpenX / Supersonic / 3lift / Sonobi
+cdn.indexexchange.com
+heapanalytics.com
+secure.adnxs.com
+prebid.adnxs.com
+rtb.openx.net
+outcome-ssp.supersonicads.com
+tlx.3lift.com
+apex.go.sonobi.com
+
+# Атрибуция, CPA-платформы, рекламатрибьюция
+appsflyer.com
+juicyads.com
+mads-eu.amazon.com
+impact.com
+d.impactradius-event.com
+api.impact.com
+www.awin1.com
+zenaps.com
+partnerstack.com
+api.partnerstack.com
+
+# Identity / профили / ID-графы
+bluekai.com
+onetag-sys.com
+pippio.com
+id5-sync.com
+thetradedesk.com
+sync.mathtag.com
+pixel.mathtag.com
+crwdcntrl.net
+bidswitch.net
+tapad.com
+prod.uidapi.com
+
+# Error-monitoring / telemetry
+notify.bugsnag.com
+browser.sentry-cdn.com
+bam.nr-data.net
+
+# Popunder / malvertising
+popads.net

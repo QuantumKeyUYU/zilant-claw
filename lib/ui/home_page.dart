@@ -287,7 +287,11 @@ class _HomePageState extends State<HomePage> {
               value: currentMode,
               isExpanded: true,
               onChanged: _isChangingMode ? null : (mode) => mode != null ? _changeMode(mode) : null,
-              items: const [ProtectionMode.standard, ProtectionMode.advanced]
+              items: const [
+                ProtectionMode.standard,
+                ProtectionMode.advanced,
+                ProtectionMode.ultra,
+              ]
                   .map(
                     (mode) => DropdownMenuItem(
                       value: mode,
@@ -304,7 +308,8 @@ class _HomePageState extends State<HomePage> {
                   .bodySmall
                   ?.copyWith(color: Colors.grey.shade700, fontWeight: FontWeight.w500),
             ),
-            if (currentMode == ProtectionMode.advanced) ...[
+            if (currentMode == ProtectionMode.advanced ||
+                currentMode == ProtectionMode.ultra) ...[
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
@@ -320,7 +325,9 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        AppStrings.strictModeWarning,
+                        currentMode == ProtectionMode.ultra
+                            ? AppStrings.ultraModeWarning
+                            : AppStrings.strictModeWarning,
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
@@ -396,6 +403,8 @@ class _HomePageState extends State<HomePage> {
         return AppStrings.protectionModeStandard;
       case ProtectionMode.advanced:
         return AppStrings.protectionModeStrict;
+      case ProtectionMode.ultra:
+        return AppStrings.protectionModeUltra;
     }
   }
 
@@ -405,6 +414,8 @@ class _HomePageState extends State<HomePage> {
         return AppStrings.protectionModeHintStandard;
       case ProtectionMode.advanced:
         return AppStrings.protectionModeHintStrict;
+      case ProtectionMode.ultra:
+        return AppStrings.protectionModeHintUltra;
     }
   }
 

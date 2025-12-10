@@ -23,6 +23,8 @@ class AppStrings {
   static const String infoModeStandard = 'Стандарт — сбалансированный режим для ежедневного использования.';
   static const String infoModeStrict =
       'Продвинутый — максимально агрессивный режим: может ломать отдельные сайты и приложения.';
+  static const String infoModeUltra =
+      'ULTRA — максимальная защита: реклама, трекинг, OEM-телеметрия и экспериментальные домены. Возможны поломки сайтов и приложений.';
   static const String infoPrivacy =
       'Приложение не собирает личные данные и не отправляет никакую аналитику наружу.';
   static const String infoControl =
@@ -83,6 +85,8 @@ class AppStrings {
       'Фильтр временно ослаблен — DNS не отвечает, чтобы не ломать интернет мы пропускаем трафик без блокировки.';
   static const String strictModeWarning =
       'В строгом режиме некоторые сайты могут не открываться — мы блокируем рискованные домены. Если сайт не открывается или ведёт себя странно — попробуйте переключиться обратно в «Стандарт».';
+  static const String ultraModeWarning =
+      'ULTRA-режим максимально агрессивен: реклама, трекинг, OEM-телеметрия и экспериментальные домены. Возможны поломки отдельных сайтов и приложений.';
   static const String blockedCompact = 'Заблокировано: %s за сеанс / %s всего';
   static const String refreshStats = 'Обновить данные';
   static const String resetStats = 'Сбросить статистику';
@@ -101,13 +105,18 @@ class AppStrings {
   static const String protectionModeLabel = 'Режим защиты';
   static const String protectionModeStandard = 'Стандарт';
   static const String protectionModeStrict = 'Продвинутый';
+  static const String protectionModeUltra = 'ULTRA';
   static const String protectionModeChanged = 'Режим защиты: %s';
   static const String protectionModeHintStandard =
       'Баланс защиты и стабильности: блокирует рекламу и трекеры.';
   static const String protectionModeHintStrict =
       'Максимальная агрессивность: может ломать отдельные сайты и приложения.';
+  static const String protectionModeHintUltra =
+      'Максимальная защита: реклама, трекинг, OEM-телеметрия и экспериментальные домены. Возможны поломки некоторых сайтов и приложений.';
   static const String strictModeActiveBanner =
       'Строгая фильтрация включена: блокируются подозрительные домены полностью. Если сайт не открывается или ведёт себя странно — попробуйте переключиться обратно в «Стандарт».';
+  static const String ultraModeActiveBanner =
+      'ULTRA-режим: блокируется максимум рекламы, трекинга и телеметрии, включая экспериментальные домены. Возможны поломки сайтов и приложений.';
   static const String modeStatus = 'Режим: %s';
   static const String filterStatusActive = 'Фильтр активен';
   static const String filterStatusFailOpen =

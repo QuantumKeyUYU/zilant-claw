@@ -49,7 +49,8 @@ class _StatsPageState extends State<StatsPage> {
     final failOpen = stats.failOpenActive;
     final vpnActive = stats.vpnActive;
     final mode = stats.modeName;
-    final isStrict = stats.mode == ProtectionMode.advanced;
+    final isStrict =
+        stats.mode == ProtectionMode.advanced || stats.mode == ProtectionMode.ultra;
 
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -116,7 +117,11 @@ class _StatsPageState extends State<StatsPage> {
             ),
             if (isStrict) ...[
               const SizedBox(height: 12),
-              _StrictModeBanner(message: AppStrings.strictModeActiveBanner),
+              _StrictModeBanner(
+                message: stats.mode == ProtectionMode.ultra
+                    ? AppStrings.ultraModeActiveBanner
+                    : AppStrings.strictModeActiveBanner,
+              ),
             ],
             const SizedBox(height: 12),
             Card(

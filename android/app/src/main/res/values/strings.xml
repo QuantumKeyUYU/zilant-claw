@@ -9,4 +9,5 @@
     <string name="protection_mode_light">Лёгкий</string>
     <string name="protection_mode_standard">Стандарт</string>
     <string name="protection_mode_strict">Жёсткий</string>
+    <string name="protection_mode_ultra">ULTRA</string>
 </resources>
