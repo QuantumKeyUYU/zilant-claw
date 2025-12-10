@@ -222,7 +222,9 @@ class DigitalDefenderVpnService : VpnService() {
         private val output = FileOutputStream(tunInterface.fileDescriptor)
         private val socket: DatagramSocket = DatagramSocket().apply {
             soTimeout = 3000
-            vpnService.protect(this)
+            if (!vpnService.protect(this)) {
+                Log.w(TAG, "Failed to protect upstream DNS socket; traffic may loop through the VPN")
+            }
         }
         private var failOpen = failOpenActive
         private var consecutiveFailures = 0
@@ -298,6 +300,16 @@ class DigitalDefenderVpnService : VpnService() {
             val protocol = packet[9].toInt() and 0xFF
             if (protocol != 17) return
 
+            val ipTotalLength = readUint16(packet, 2)
+            val effectiveLength = minOf(length, ipTotalLength)
+
+            if (DEBUG_DNS) {
+                Log.d(
+                    TAG,
+                    "DNS packet received: version=$version ipLen=$effectiveLength srcPort=${readUint16(packet, ihl)} destPort=${readUint16(packet, ihl + 2)}"
+                )
+            }
+
             val udpOffset = ihl
             val srcPort = readUint16(packet, udpOffset)
             val destPort = readUint16(packet, udpOffset + 2)
@@ -305,10 +317,10 @@ class DigitalDefenderVpnService : VpnService() {
 
             val udpLength = readUint16(packet, udpOffset + 4)
             if (udpLength < 8) return
-            if (udpOffset + udpLength > length) return
+            if (udpOffset + udpLength > effectiveLength) return
 
             val dnsOffset = udpOffset + 8
-            val dnsLength = length - dnsOffset
+            val dnsLength = effectiveLength - dnsOffset
             if (dnsLength <= 0) return
             if (dnsLength > 1500) {
                 forwardToUpstream(packet, length, ihl, srcPort, destPort, dnsOffset, dnsLength)
@@ -318,7 +330,7 @@ class DigitalDefenderVpnService : VpnService() {
             val query = extractQuery(packet, dnsOffset, dnsLength)
             if (query == null) {
                 if (DEBUG_DNS) {
-                    Log.d(TAG, "DNS query: <parse_error> -> PARSE_ERROR")
+                Log.d(TAG, "DNS query: <parse_error> -> PARSE_ERROR")
                 }
                 forwardToUpstream(packet, length, ihl, srcPort, destPort, dnsOffset, dnsLength)
                 return
@@ -333,7 +345,7 @@ class DigitalDefenderVpnService : VpnService() {
                 sendBlockedResponse(packet, ihl, srcPort, destPort, dnsOffset, query.questionEnd)
             } else {
                 if (DEBUG_DNS) {
-                    Log.d(TAG, "DNS query: $domain -> ALLOWED")
+                    Log.d(TAG, "DNS query: $domain -> ALLOWED${if (failOpen) " (fail-open)" else ""}")
                 }
                 forwardToUpstream(packet, length, ihl, srcPort, destPort, dnsOffset, dnsLength)
             }
@@ -352,6 +364,9 @@ class DigitalDefenderVpnService : VpnService() {
             var attempts = 0
             while (attempts < upstreamServers.size) {
                 val upstream = upstreamServers[currentUpstreamIndex]
+                if (DEBUG_DNS) {
+                    Log.d(TAG, "Forwarding DNS to upstream ${upstream.address}:${upstream.port}; attempt ${attempts + 1}")
+                }
                 if (tryUpstream(upstream, dnsPayload, packet, srcPort, destPort)) {
                     return
                 }
@@ -361,13 +376,16 @@ class DigitalDefenderVpnService : VpnService() {
 
             val fallback = tryBuildOriginalDestination(packet, destPort)
             if (fallback != null) {
+                if (DEBUG_DNS) {
+                    Log.d(TAG, "Trying original DNS destination ${fallback.address}:${fallback.port} after upstream failures")
+                }
                 if (tryUpstream(fallback, dnsPayload, packet, srcPort, destPort)) {
                     Log.w(TAG, "Used fallback DNS ${fallback.address} after upstream failures")
                     return
                 }
             }
 
-            Log.w(TAG, "All upstream DNS servers failed for current request; letting client retry")
+            Log.w(TAG, "All upstream DNS servers failed for current request; letting client retry (failOpen=$failOpen)")
             recordUpstreamFailure()
         }
 
@@ -382,11 +400,18 @@ class DigitalDefenderVpnService : VpnService() {
                 val request = DatagramPacket(dnsPayload, dnsPayload.size, upstream)
                 socket.send(request)
 
-                val responseBuffer = ByteArray(512)
+                val responseBuffer = ByteArray(4096)
                 val responsePacket = DatagramPacket(responseBuffer, responseBuffer.size)
                 socket.receive(responsePacket)
 
                 recordUpstreamSuccess()
+
+                if (DEBUG_DNS) {
+                    Log.d(
+                        TAG,
+                        "Upstream ${upstream.address} responded len=${responsePacket.length}; sending back to client"
+                    )
+                }
 
                 val srcIp = packet.copyOfRange(12, 16)
                 val destIp = packet.copyOfRange(16, 20)
@@ -580,7 +605,7 @@ class DigitalDefenderVpnService : VpnService() {
         private const val CHANNEL_ID = "digital_defender_vpn"
         private const val NOTIFICATION_ID = 1
         internal const val TAG = "DigitalDefenderVpnService"
-        private const val DEBUG_DNS = false
+        private const val DEBUG_DNS = true
         internal const val PREFS_NAME = "digital_defender_prefs"
         internal const val KEY_BLOCKED_COUNT = "blocked_count"
         internal const val KEY_SESSION_BLOCKED_COUNT = "session_blocked_count"
