@@ -101,7 +101,7 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(AppStrings.common.title),
+        title: Text(AppStrings.common.title),
         centerTitle: true,
         actions: [
           IconButton(
@@ -238,11 +238,11 @@ class _HomePageState extends State<HomePage> {
                 child: needsPermission
                     ? ElevatedButton(
                         onPressed: _requestVpnPermission,
-                        child: const Text(AppStrings.actions.openVpnSettings),
+                        child: Text(AppStrings.actions.openVpnSettings),
                       )
                     : ElevatedButton(
                         onPressed: _toggleProtection,
-                        child: const Text(AppStrings.actions.retryStart),
+                        child: Text(AppStrings.actions.retryStart),
                       ),
               )
             ],
@@ -390,7 +390,7 @@ class _HomePageState extends State<HomePage> {
         Expanded(
           child: ElevatedButton(
             onPressed: () => _goToStats(context),
-            child: const Text(AppStrings.stats.details),
+            child: Text(AppStrings.stats.details),
           ),
         ),
         const SizedBox(width: 12),
@@ -398,7 +398,7 @@ class _HomePageState extends State<HomePage> {
           child: OutlinedButton.icon(
             onPressed: _resetStats,
             icon: const Icon(Icons.delete_outline),
-            label: const Text(AppStrings.stats.resetStats),
+            label: Text(AppStrings.stats.resetStats),
           ),
         ),
       ],

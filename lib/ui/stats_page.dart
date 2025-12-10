@@ -131,7 +131,7 @@ class _StatsPageState extends State<StatsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(AppStrings.stats.headerTitle),
+        title: Text(AppStrings.stats.headerTitle),
       ),
       body: RefreshIndicator(
         onRefresh: () async => widget.controller.refreshStats(),
