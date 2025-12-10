@@ -35,6 +35,7 @@ class MainActivity : FlutterActivity() {
                     "android_get_blocked_count" -> getBlockedCount(result)
                     "setProtectionMode" -> setProtectionMode(call, result)
                     "getProtectionMode" -> getProtectionMode(result)
+                    "openVpnSettings" -> openVpnSettings(result)
                     else -> result.notImplemented()
                 }
             }
@@ -115,6 +116,18 @@ class MainActivity : FlutterActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get protection mode", e)
             result.error("get_mode_failed", "Failed to get protection mode", null)
+        }
+    }
+
+    private fun openVpnSettings(result: MethodChannel.Result) {
+        try {
+            val intent = Intent("android.settings.VPN_SETTINGS")
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+            result.success(null)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to open VPN settings", e)
+            result.error("denied", "Unable to open VPN settings: ${e.message}", null)
         }
     }
 

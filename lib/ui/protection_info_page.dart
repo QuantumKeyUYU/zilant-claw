@@ -13,7 +13,7 @@ class ProtectionInfoPage extends StatelessWidget {
     final bodyStyle = Theme.of(context).textTheme.bodyMedium;
     return Scaffold(
       appBar: AppBar(
-        title: const Text(AppStrings.infoTitle),
+        title: const Text(AppStrings.info.title),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).maybePop(),
@@ -26,26 +26,26 @@ class ProtectionInfoPage extends StatelessWidget {
             if (mode == ProtectionMode.advanced || mode == ProtectionMode.ultra) ...[
               _StrictModeBanner(
                   message: mode == ProtectionMode.ultra
-                      ? AppStrings.ultraModeActiveBanner
-                      : AppStrings.strictModeActiveBanner),
+                      ? AppStrings.modes.ultraModeWarning
+                      : AppStrings.modes.strictModeWarning),
               const SizedBox(height: 12),
             ],
-            Text(AppStrings.infoIntro, style: bodyStyle),
+            Text(AppStrings.info.intro, style: bodyStyle),
             const SizedBox(height: 12),
-            Text(AppStrings.infoBlocklist, style: bodyStyle),
+            Text(AppStrings.info.blocklist, style: bodyStyle),
             const SizedBox(height: 12),
-            Text(AppStrings.infoModeStandard, style: bodyStyle),
+            Text(AppStrings.info.modeStandard, style: bodyStyle),
             const SizedBox(height: 8),
-            Text(AppStrings.infoModeStrict, style: bodyStyle),
+            Text(AppStrings.info.modeStrict, style: bodyStyle),
             const SizedBox(height: 8),
-            Text(AppStrings.infoModeUltra, style: bodyStyle),
+            Text(AppStrings.info.modeUltra, style: bodyStyle),
             const SizedBox(height: 12),
-            Text(AppStrings.infoPrivacy, style: bodyStyle),
+            Text(AppStrings.info.privacy, style: bodyStyle),
             const SizedBox(height: 12),
-            Text(AppStrings.infoControl, style: bodyStyle),
+            Text(AppStrings.info.control, style: bodyStyle),
             const SizedBox(height: 24),
             Text(
-              AppStrings.infoChecklistTitle,
+              AppStrings.info.checklistTitle,
               style: Theme.of(context)
                   .textTheme
                   .titleLarge
@@ -53,43 +53,43 @@ class ProtectionInfoPage extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _InfoSection(
-              title: AppStrings.infoHardwareTitle,
+              title: AppStrings.info.hardwareTitle,
               items: const [
-                AppStrings.infoHardware1,
-                AppStrings.infoHardware2,
-                AppStrings.infoHardware3,
+                AppStrings.info.hardware1,
+                AppStrings.info.hardware2,
+                AppStrings.info.hardware3,
               ],
             ),
             _InfoSection(
-              title: AppStrings.infoNetworkTitle,
+              title: AppStrings.info.networkTitle,
               items: const [
-                AppStrings.infoNetwork1,
-                AppStrings.infoNetwork2,
-                AppStrings.infoNetwork3,
+                AppStrings.info.network1,
+                AppStrings.info.network2,
+                AppStrings.info.network3,
               ],
             ),
             _InfoSection(
-              title: AppStrings.infoPermissionsTitle,
+              title: AppStrings.info.permissionsTitle,
               items: const [
-                AppStrings.infoPermissions1,
-                AppStrings.infoPermissions2,
-                AppStrings.infoPermissions3,
+                AppStrings.info.permissions1,
+                AppStrings.info.permissions2,
+                AppStrings.info.permissions3,
               ],
             ),
             _InfoSection(
-              title: AppStrings.infoUxTitle,
+              title: AppStrings.info.uxTitle,
               items: const [
-                AppStrings.infoUx1,
-                AppStrings.infoUx2,
-                AppStrings.infoUx3,
+                AppStrings.info.ux1,
+                AppStrings.info.ux2,
+                AppStrings.info.ux3,
               ],
             ),
             _InfoSection(
-              title: AppStrings.infoSupplyTitle,
+              title: AppStrings.info.supplyTitle,
               items: const [
-                AppStrings.infoSupply1,
-                AppStrings.infoSupply2,
-                AppStrings.infoSupply3,
+                AppStrings.info.supply1,
+                AppStrings.info.supply2,
+                AppStrings.info.supply3,
               ],
             ),
           ],

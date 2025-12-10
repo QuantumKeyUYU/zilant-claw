@@ -53,6 +53,10 @@ class _HomePageState extends State<HomePage> {
     await widget.controller.resetStats();
   }
 
+  Future<void> _requestVpnPermission() async {
+    await widget.controller.requestVpnPermission();
+  }
+
   Future<void> _openProtectionInfo(BuildContext context) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -79,7 +83,7 @@ class _HomePageState extends State<HomePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            error ?? AppStrings.protectionModeChanged.replaceFirst('%s', _modeLabel(mode)),
+            error ?? AppStrings.modes.changed.replaceFirst('%s', _modeLabel(mode)),
           ),
         ),
       );
@@ -97,12 +101,12 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(AppStrings.title),
+        title: const Text(AppStrings.common.title),
         centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.verified_user_outlined),
-            tooltip: AppStrings.openPrivacyGuide,
+            tooltip: AppStrings.common.openPrivacyGuide,
             onPressed: () => _openProtectionInfo(context),
           )
         ],
@@ -145,7 +149,11 @@ class _HomePageState extends State<HomePage> {
     final needsPermission = widget.controller.errorCode == 'denied';
 
     final title = _titleForState(state, isOn);
-    final subtitle = _subtitleForState(state, errorMessage, isOn);
+    final subtitle = _subtitleForState(
+      state,
+      needsPermission ? AppStrings.home.permissionRequired : errorMessage,
+      isOn,
+    );
 
     return Card(
       color: Colors.blueGrey.shade900,
@@ -211,7 +219,7 @@ class _HomePageState extends State<HomePage> {
             if (failOpenActive) ...[
               const SizedBox(height: 10),
               Text(
-                AppStrings.protectionFailOpenWarning,
+                AppStrings.home.protectionFailOpenWarning,
                 style: Theme.of(context)
                     .textTheme
                     .bodySmall
@@ -229,12 +237,12 @@ class _HomePageState extends State<HomePage> {
                 alignment: Alignment.centerLeft,
                 child: needsPermission
                     ? ElevatedButton(
-                        onPressed: _toggleProtection,
-                        child: const Text(AppStrings.grantVpnPermission),
+                        onPressed: _requestVpnPermission,
+                        child: const Text(AppStrings.actions.openVpnSettings),
                       )
                     : ElevatedButton(
                         onPressed: _toggleProtection,
-                        child: const Text(AppStrings.retryStart),
+                        child: const Text(AppStrings.actions.retryStart),
                       ),
               )
             ],
@@ -248,16 +256,16 @@ class _HomePageState extends State<HomePage> {
     final text = () {
       switch (state) {
         case ProtectionState.on:
-          return AppStrings.protectionHintOn;
+          return AppStrings.home.protectionHintOn;
         case ProtectionState.reconnecting:
-          return AppStrings.protectionHintReconnecting;
+          return '${AppStrings.home.protectionHintReconnecting} (${AppStrings.home.reconnectingSoon})';
         case ProtectionState.starting:
-          return AppStrings.progressTurningOn;
+          return AppStrings.home.progressTurningOn;
         case ProtectionState.error:
-          return AppStrings.protectionHintError;
+          return AppStrings.home.protectionHintError;
         case ProtectionState.off:
         default:
-          return AppStrings.protectionHintOff;
+          return AppStrings.home.protectionHintOff;
       }
     }();
     return Text(
@@ -276,7 +284,7 @@ class _HomePageState extends State<HomePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              AppStrings.protectionModeLabel,
+              AppStrings.modes.label,
               style: Theme.of(context)
                   .textTheme
                   .titleMedium
@@ -326,8 +334,8 @@ class _HomePageState extends State<HomePage> {
                     Expanded(
                       child: Text(
                         currentMode == ProtectionMode.ultra
-                            ? AppStrings.ultraModeWarning
-                            : AppStrings.strictModeWarning,
+                            ? AppStrings.modes.ultraModeWarning
+                            : AppStrings.modes.strictModeWarning,
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
@@ -345,7 +353,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildStatsSummary(BuildContext context, int blockedCount, int sessionBlocked) {
-    final summary = AppStrings.blockedCompact
+    final summary = AppStrings.stats.blockedCompact
         .replaceFirst('%s', sessionBlocked.toString())
         .replaceFirst('%s', blockedCount.toString());
 
@@ -382,7 +390,7 @@ class _HomePageState extends State<HomePage> {
         Expanded(
           child: ElevatedButton(
             onPressed: () => _goToStats(context),
-            child: const Text(AppStrings.details),
+            child: const Text(AppStrings.stats.details),
           ),
         ),
         const SizedBox(width: 12),
@@ -390,7 +398,7 @@ class _HomePageState extends State<HomePage> {
           child: OutlinedButton.icon(
             onPressed: _resetStats,
             icon: const Icon(Icons.delete_outline),
-            label: const Text(AppStrings.resetStats),
+            label: const Text(AppStrings.stats.resetStats),
           ),
         ),
       ],
@@ -400,37 +408,39 @@ class _HomePageState extends State<HomePage> {
   String _modeLabel(ProtectionMode mode) {
     switch (mode) {
       case ProtectionMode.standard:
-        return AppStrings.protectionModeStandard;
+        return AppStrings.modes.standard;
       case ProtectionMode.advanced:
-        return AppStrings.protectionModeStrict;
+        return AppStrings.modes.strict;
       case ProtectionMode.ultra:
-        return AppStrings.protectionModeUltra;
+        return AppStrings.modes.ultra;
     }
   }
 
   String _modeDescription(ProtectionMode mode) {
     switch (mode) {
       case ProtectionMode.standard:
-        return AppStrings.protectionModeHintStandard;
+        return AppStrings.modes.hintStandard;
       case ProtectionMode.advanced:
-        return AppStrings.protectionModeHintStrict;
+        return AppStrings.modes.hintStrict;
       case ProtectionMode.ultra:
-        return AppStrings.protectionModeHintUltra;
+        return AppStrings.modes.hintUltra;
     }
   }
 
   String _titleForState(ProtectionState state, bool isOn) {
     switch (state) {
       case ProtectionState.starting:
-        return AppStrings.protectionTurningOn;
+        return AppStrings.home.protectionTurningOn;
       case ProtectionState.reconnecting:
-        return AppStrings.protectionReconnecting;
+        return AppStrings.home.protectionReconnecting;
       case ProtectionState.error:
-        return AppStrings.protectionUnknown;
+        return AppStrings.home.protectionUnknown;
       case ProtectionState.on:
       case ProtectionState.off:
       default:
-        return isOn ? AppStrings.protectionEnabled : AppStrings.protectionDisabled;
+        return isOn
+            ? AppStrings.home.protectionEnabled
+            : AppStrings.home.protectionDisabled;
     }
   }
 
@@ -441,15 +451,15 @@ class _HomePageState extends State<HomePage> {
   ) {
     switch (state) {
       case ProtectionState.starting:
-        return AppStrings.progressTurningOn;
+        return AppStrings.home.progressTurningOn;
       case ProtectionState.reconnecting:
-        return AppStrings.protectionReconnectingHint;
+        return AppStrings.home.protectionReconnectingHint;
       case ProtectionState.error:
-        return errorMessage ?? AppStrings.progressError;
+        return errorMessage ?? AppStrings.home.progressError;
       case ProtectionState.on:
       case ProtectionState.off:
       default:
-        return isOn ? AppStrings.vpnActive : AppStrings.vpnInactive;
+        return isOn ? AppStrings.home.vpnActive : AppStrings.home.vpnInactive;
     }
   }
 }
@@ -477,16 +487,16 @@ class _StateIndicator extends StatelessWidget {
   String _labelForState() {
     switch (state) {
       case ProtectionState.on:
-        return AppStrings.stateOn;
+        return AppStrings.stats.stateOn;
       case ProtectionState.starting:
-        return AppStrings.stateStarting;
+        return AppStrings.stats.stateStarting;
       case ProtectionState.reconnecting:
-        return AppStrings.stateReconnecting;
+        return AppStrings.stats.stateReconnecting;
       case ProtectionState.error:
-        return AppStrings.stateError;
+        return AppStrings.stats.stateError;
       case ProtectionState.off:
       default:
-        return AppStrings.stateOff;
+        return AppStrings.stats.stateOff;
     }
   }
 

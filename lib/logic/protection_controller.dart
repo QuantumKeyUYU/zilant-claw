@@ -10,7 +10,10 @@ enum ProtectionState { off, starting, on, reconnecting, error }
 enum ProtectionMode { standard, advanced, ultra }
 
 class ProtectionController extends ChangeNotifier {
-  ProtectionController() {
+  ProtectionController({bool? androidOverride, bool? windowsOverride, Duration commandTimeout = const Duration(seconds: 15)})
+      : _isAndroid = androidOverride ?? Platform.isAndroid,
+        _isWindows = windowsOverride ?? Platform.isWindows,
+        _commandTimeout = commandTimeout {
     _attachEventStream();
   }
 
@@ -21,6 +24,10 @@ class ProtectionController extends ChangeNotifier {
   static const EventChannel _eventsChannel =
       EventChannel('digital_defender/protection_events');
 
+  final bool _isAndroid;
+  final bool _isWindows;
+  final Duration _commandTimeout;
+
   ProtectionState _state = ProtectionState.off;
   String? _errorMessage;
   String? _errorCode;
@@ -29,6 +36,7 @@ class ProtectionController extends ChangeNotifier {
   ProtectionMode _mode = ProtectionMode.standard;
   StreamSubscription<dynamic>? _eventSubscription;
   bool _isCommandInFlight = false;
+  Timer? _commandTimeoutTimer;
 
   ProtectionState get state => _state;
   String? get errorMessage => _errorMessage;
@@ -39,7 +47,7 @@ class ProtectionController extends ChangeNotifier {
   bool get isCommandInFlight => _isCommandInFlight;
 
   Future<void> loadProtectionMode() async {
-    if (!Platform.isAndroid) {
+    if (!_isAndroid) {
       return;
     }
     try {
@@ -54,7 +62,7 @@ class ProtectionController extends ChangeNotifier {
   }
 
   Future<void> setProtectionMode(ProtectionMode newMode) async {
-    if (!Platform.isAndroid) {
+    if (!_isAndroid) {
       _mode = newMode;
       notifyListeners();
       return;
@@ -93,62 +101,66 @@ class ProtectionController extends ChangeNotifier {
   }
 
   Future<void> turnOnProtection() async {
-    if (!Platform.isAndroid && !Platform.isWindows) {
+    if (!_isAndroid && !_isWindows) {
       _setError('Платформа не поддерживается на этом этапе.');
       return;
     }
     if (_isCommandInFlight) return;
-    _markCommandStart();
+    _markCommandStart('turnOnProtection');
     try {
-      if (Platform.isAndroid) {
+      if (_isAndroid) {
         await _channel.invokeMethod('android_start_protection');
-      } else if (Platform.isWindows) {
+      } else if (_isWindows) {
         await _channel.invokeMethod('windows_start_protection');
         _updateState(ProtectionState.on);
       }
       _clearError();
-      if (!Platform.isAndroid) {
+      if (!_isAndroid) {
         _markCommandDone();
       }
       await refreshStats();
     } on PlatformException catch (e) {
       _markCommandDone();
       _setError(_mapPlatformError(e), code: e.code);
-    } catch (_) {
+      debugPrint('ProtectionController.turnOnProtection platform error: $e');
+    } catch (e) {
       _markCommandDone();
+      debugPrint('ProtectionController.turnOnProtection error: $e');
       _setError('Не удалось включить защиту. Проверь разрешения VPN.');
     }
   }
 
   Future<void> turnOffProtection() async {
-    if (!Platform.isAndroid && !Platform.isWindows) {
+    if (!_isAndroid && !_isWindows) {
       _setError('Платформа не поддерживается на этом этапе.');
       return;
     }
     if (_isCommandInFlight) return;
-    _markCommandStart();
+    _markCommandStart('turnOffProtection');
     try {
-      if (Platform.isAndroid) {
+      if (_isAndroid) {
         await _channel.invokeMethod('android_stop_protection');
-      } else if (Platform.isWindows) {
+      } else if (_isWindows) {
         await _channel.invokeMethod('windows_stop_protection');
         _updateState(ProtectionState.off);
       }
-      if (!Platform.isAndroid) {
+      if (!_isAndroid) {
         _markCommandDone();
       }
       await refreshStats();
     } on PlatformException catch (e) {
       _markCommandDone();
       _setError(e.message ?? 'Ошибка платформы.', code: e.code);
-    } catch (_) {
+      debugPrint('ProtectionController.turnOffProtection platform error: $e');
+    } catch (e) {
       _markCommandDone();
+      debugPrint('ProtectionController.turnOffProtection error: $e');
       _setError('Не удалось выключить защиту.');
     }
   }
 
   Future<void> refreshStats() async {
-    if (!Platform.isAndroid) {
+    if (!_isAndroid) {
       _stats = ProtectionStats.empty();
       _statsError = null;
       notifyListeners();
@@ -165,13 +177,14 @@ class ProtectionController extends ChangeNotifier {
         }
       }
     } catch (e) {
+      debugPrint('ProtectionController.refreshStats error: $e');
       _statsError = 'Не удалось получить статистику. Попробуйте ещё раз.';
     }
     notifyListeners();
   }
 
   Future<void> resetStats() async {
-    if (!Platform.isAndroid) {
+    if (!_isAndroid) {
       _stats = ProtectionStats.empty();
       _statsError = null;
       notifyListeners();
@@ -181,13 +194,14 @@ class ProtectionController extends ChangeNotifier {
       await _statsChannel.invokeMethod('resetStats');
       await refreshStats();
     } catch (e) {
+      debugPrint('ProtectionController.resetStats error: $e');
       _statsError = 'Не удалось сбросить статистику. Попробуйте ещё раз.';
       notifyListeners();
     }
   }
 
   Future<void> clearRecentBlocks() async {
-    if (!Platform.isAndroid) {
+    if (!_isAndroid) {
       _stats = ProtectionStats(
         blockedCount: _stats.blockedCount,
         sessionBlocked: _stats.sessionBlocked,
@@ -203,8 +217,22 @@ class ProtectionController extends ChangeNotifier {
       await _statsChannel.invokeMethod('clearRecent');
       await refreshStats();
     } catch (e) {
+      debugPrint('ProtectionController.clearRecentBlocks error: $e');
       _statsError = 'Не удалось очистить список доменов. Попробуйте ещё раз.';
       notifyListeners();
+    }
+  }
+
+  Future<void> requestVpnPermission() async {
+    if (!_isAndroid) return;
+    try {
+      await _channel.invokeMethod('openVpnSettings');
+    } on PlatformException catch (e) {
+      debugPrint('ProtectionController.requestVpnPermission platform error: $e');
+      _setError(_mapPlatformError(e), code: e.code);
+    } catch (e) {
+      debugPrint('ProtectionController.requestVpnPermission error: $e');
+      _setError('Не удалось открыть настройки VPN.');
     }
   }
 
@@ -217,6 +245,9 @@ class ProtectionController extends ChangeNotifier {
   }
 
   void _setError(String message, {String? code}) {
+    if (_errorMessage == message && _state == ProtectionState.error) {
+      return;
+    }
     _state = ProtectionState.error;
     _errorMessage = message;
     _errorCode = code;
@@ -240,7 +271,7 @@ class ProtectionController extends ChangeNotifier {
   }
 
   void _attachEventStream() {
-    if (!Platform.isAndroid) return;
+    if (!_isAndroid) return;
     _eventSubscription = _eventsChannel.receiveBroadcastStream().listen(
       _handleNativeState,
       onError: (Object error) {
@@ -261,6 +292,9 @@ class ProtectionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  @visibleForTesting
+  void debugHandleNativeState(String state) => _handleNativeState(state);
+
   ProtectionState? _mapNativeState(dynamic raw) {
     if (raw is! String) return null;
     switch (raw.toUpperCase()) {
@@ -279,14 +313,23 @@ class ProtectionController extends ChangeNotifier {
     }
   }
 
-  void _markCommandStart() {
+  void _markCommandStart(String commandName) {
     _isCommandInFlight = true;
+    _commandTimeoutTimer?.cancel();
+    _commandTimeoutTimer = Timer(_commandTimeout, () {
+      if (_isCommandInFlight) {
+        _isCommandInFlight = false;
+        _setError('Платформенный вызов завис, попробуйте ещё раз.', code: 'timeout');
+        debugPrint('ProtectionController: command $commandName timed out after $_commandTimeout');
+      }
+    });
     notifyListeners();
   }
 
   void _markCommandDone() {
     if (_isCommandInFlight) {
       _isCommandInFlight = false;
+      _commandTimeoutTimer?.cancel();
       notifyListeners();
     }
   }
@@ -294,6 +337,7 @@ class ProtectionController extends ChangeNotifier {
   @override
   void dispose() {
     _eventSubscription?.cancel();
+    _commandTimeoutTimer?.cancel();
     super.dispose();
   }
 

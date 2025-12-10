@@ -27,7 +27,7 @@ class _DigitalDefenderAppState extends State<DigitalDefenderApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: AppStrings.title,
+      title: AppStrings.common.title,
       theme: buildTheme(),
       home: HomePage(controller: _controller),
     );
