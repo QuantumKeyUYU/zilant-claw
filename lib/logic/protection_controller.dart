@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 
 enum ProtectionState { off, starting, on, reconnecting, error }
 
-enum ProtectionMode { light, standard, strict }
+enum ProtectionMode { standard, advanced }
 
 class ProtectionController extends ChangeNotifier {
   ProtectionController() {
@@ -299,10 +299,9 @@ class ProtectionController extends ChangeNotifier {
 
   ProtectionMode _stringToMode(String raw) {
     switch (raw.toLowerCase()) {
-      case 'light':
-        return ProtectionMode.light;
       case 'strict':
-        return ProtectionMode.strict;
+      case 'advanced':
+        return ProtectionMode.advanced;
       case 'standard':
       default:
         return ProtectionMode.standard;
@@ -311,9 +310,7 @@ class ProtectionController extends ChangeNotifier {
 
   String _modeToString(ProtectionMode mode) {
     switch (mode) {
-      case ProtectionMode.light:
-        return 'light';
-      case ProtectionMode.strict:
+      case ProtectionMode.advanced:
         return 'strict';
       case ProtectionMode.standard:
         return 'standard';
@@ -352,10 +349,8 @@ class ProtectionStats {
   // UI ожидает строковое название режима
   String get modeName {
     switch (mode) {
-      case ProtectionMode.light:
-        return 'Light';
-      case ProtectionMode.strict:
-        return 'Strict';
+      case ProtectionMode.advanced:
+        return 'Advanced';
       case ProtectionMode.standard:
       default:
         return 'Standard';
@@ -407,10 +402,9 @@ class ProtectionStats {
     final parsedMode = modeRaw is String
         ? () {
             switch (modeRaw.toLowerCase()) {
-              case 'light':
-                return ProtectionMode.light;
               case 'strict':
-                return ProtectionMode.strict;
+              case 'advanced':
+                return ProtectionMode.advanced;
               default:
                 return ProtectionMode.standard;
             }

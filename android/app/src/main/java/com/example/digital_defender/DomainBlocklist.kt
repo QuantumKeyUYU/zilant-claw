@@ -3,6 +3,7 @@ package com.example.digital_defender
 import android.content.Context
 import android.util.Log
 import java.io.FileNotFoundException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
@@ -18,43 +19,87 @@ object DomainBlocklist {
     private const val DEFAULT_MODE = MODE_STANDARD
     private const val BLOCKLIST_BASE_URL = "https://example.com/digital-defender/blocklist"
 
-    private val assetFiles = mapOf(
-        MODE_LIGHT to listOf("blocklists/blocklist_light.txt"),
-        MODE_STANDARD to listOf(
-            "blocklists/blocklist_light.txt",
-            "blocklists/blocklist_standard.txt"
-        ),
-        MODE_STRICT to listOf(
-            "blocklists/blocklist_light.txt",
-            "blocklists/blocklist_standard.txt",
-            "blocklists/blocklist_strict.txt"
-        )
+    enum class Category {
+        ADS,
+        TRACKERS,
+        ANALYTICS,
+        MALWARE,
+        CRYPTO,
+        SOCIAL,
+        ABTEST,
+        CONSENT,
+        OEM,
+        MISC
+    }
+
+    enum class MatchType { EXACT, SUFFIX }
+
+    data class BlockMatch(val rule: String, val category: Category, val type: MatchType)
+
+    data class Decision(
+        val mode: String,
+        val blockedMatch: BlockMatch? = null,
+        val allowedRule: String? = null
+    ) {
+        val isBlocked: Boolean get() = blockedMatch != null && allowedRule == null
+        val isAllowed: Boolean get() = allowedRule != null || blockedMatch == null
+    }
+
+    private data class BlocklistSource(
+        val assetPath: String?,
+        val localName: String?,
+        val category: Category
     )
 
-    private val localFiles = mapOf(
-        MODE_LIGHT to listOf("blocklist_light.txt"),
-        MODE_STANDARD to listOf("blocklist_light.txt", "blocklist_standard.txt"),
-        MODE_STRICT to listOf("blocklist_light.txt", "blocklist_standard.txt", "blocklist_strict.txt")
-    )
-
-    private val allowlist = setOf(
+    private val defaultAllowlist = setOf(
         "google.com",
         "www.google.com",
         "yandex.ru",
         "www.yandex.ru"
     )
 
+    // To extend strict mode for obfuscated test cases, drop the domains into
+    // assets/blocklists/blocklist_test_obfusgated.txt (see file header for notes).
+    private val modeSources = mapOf(
+        MODE_STANDARD to listOf(
+            BlocklistSource(
+                assetPath = "blocklists/blocklist_standard.txt",
+                localName = "blocklist_standard.txt",
+                category = Category.ADS
+            )
+        ),
+        MODE_STRICT to listOf(
+            BlocklistSource(
+                assetPath = "blocklists/blocklist_standard.txt",
+                localName = "blocklist_standard.txt",
+                category = Category.ADS
+            ),
+            BlocklistSource(
+                assetPath = "blocklists/blocklist_strict.txt",
+                localName = "blocklist_strict.txt",
+                category = Category.MALWARE
+            ),
+            BlocklistSource(
+                assetPath = "blocklists/blocklist_test_obfusgated.txt",
+                localName = "blocklist_test_obfusgated.txt",
+                category = Category.MISC
+            )
+        )
+    )
+
     data class BlocklistData(
         val mode: String,
-        val exact: Set<String>,
-        val suffixes: Set<String>,
+        val exact: Map<String, Category>,
+        val suffixes: Map<String, Category>,
+        val allowExact: Set<String>,
+        val allowSuffixes: Set<String>,
         val sample: List<String>
     ) {
         val count: Int = exact.size + suffixes.size
     }
 
     private val currentBlocklist = AtomicReference(
-        BlocklistData(DEFAULT_MODE, emptySet(), emptySet(), emptyList())
+        BlocklistData(DEFAULT_MODE, emptyMap(), emptyMap(), emptySet(), emptySet(), emptyList())
     )
 
     @Volatile
@@ -88,13 +133,15 @@ object DomainBlocklist {
                 return false
             }
 
-            val parsed = body.byteInputStream().use { buildBlocklistDataFromStream(it, mode) }
+            val parsed = body.byteInputStream().use {
+                buildBlocklistDataFromStream(it, mode, Category.MISC)
+            }
             if (parsed.count == 0) {
                 Log.w(TAG, "Failed to refresh blocklist: parsed empty list from $url")
                 return false
             }
 
-            val localFile = localFiles[mode]?.lastOrNull() ?: return false
+            val localFile = modeSources[mode]?.lastOrNull()?.localName ?: return false
             context.openFileOutput(localFile, Context.MODE_PRIVATE).use { output ->
                 output.write(body.toByteArray())
             }
@@ -109,37 +156,18 @@ object DomainBlocklist {
         }
     }
 
-    fun isBlocked(domain: String): Boolean {
-        if (!initialized) return false
+    fun evaluate(domain: String): Decision {
+        if (!initialized) return Decision(currentBlocklist.get().mode, allowedRule = "not_initialized")
         val data = currentBlocklist.get()
-        return isBlocked(domain, data)
+        return evaluate(domain, data)
     }
 
-    internal fun isBlocked(domain: String, data: BlocklistData): Boolean {
-        val normalized = domain.lowercase(Locale.US)
-        if (isAllowed(normalized)) return false
-
-        var current = normalized
-        while (current.isNotEmpty()) {
-            if (data.exact.contains(current)) return true
-            if (data.suffixes.contains(current)) return true
-            val dotIndex = current.indexOf('.')
-            if (dotIndex == -1) break
-            current = current.substring(dotIndex + 1)
-        }
-        return false
+    fun isBlocked(domain: String): Boolean {
+        return evaluate(domain).isBlocked
     }
 
     fun isAllowed(domain: String): Boolean {
-        val normalized = domain.lowercase(Locale.US)
-        var current = normalized
-        while (current.isNotEmpty()) {
-            if (allowlist.contains(current)) return true
-            val dotIndex = current.indexOf('.')
-            if (dotIndex == -1) break
-            current = current.substring(dotIndex + 1)
-        }
-        return false
+        return evaluate(domain).isAllowed
     }
 
     private fun loadAsyncForMode(context: Context, mode: String) {
@@ -154,11 +182,16 @@ object DomainBlocklist {
     }
 
     private fun loadFromLocalFile(context: Context, mode: String): Boolean {
-        val files = localFiles[mode] ?: return false
+        val files = modeSources[mode] ?: return false
         val loaded = ArrayList<BlocklistData>()
-        files.forEach { localFile ->
+        files.forEach { source ->
+            val localFile = source.localName ?: return@forEach
             try {
-                val data = buildBlocklistDataFromStream(context.openFileInput(localFile), mode)
+                val data = buildBlocklistDataFromStream(
+                    context.openFileInput(localFile),
+                    mode,
+                    source.category
+                )
                 loaded.add(data)
                 Log.d(TAG, "Loaded ${data.count} domains from internal storage file $localFile")
             } catch (e: FileNotFoundException) {
@@ -166,7 +199,8 @@ object DomainBlocklist {
                     try {
                         val legacyLoaded = buildBlocklistDataFromStream(
                             context.openFileInput("blocklist.txt"),
-                            mode
+                            mode,
+                            source.category
                         )
                         loaded.add(legacyLoaded)
                         Log.i(TAG, "Loaded ${legacyLoaded.count} domains from legacy local file blocklist.txt")
@@ -187,11 +221,16 @@ object DomainBlocklist {
     }
 
     private fun loadFromAsset(context: Context, mode: String): Boolean {
-        val files = assetFiles[mode] ?: return false
+        val files = modeSources[mode] ?: return false
         val loaded = ArrayList<BlocklistData>()
-        files.forEach { assetFile ->
+        files.forEach { source ->
+            val assetFile = source.assetPath ?: return@forEach
             try {
-                val data = buildBlocklistDataFromStream(context.assets.open(assetFile), mode)
+                val data = buildBlocklistDataFromStream(
+                    context.assets.open(assetFile),
+                    mode,
+                    source.category
+                )
                 loaded.add(data)
                 Log.d(TAG, "Loaded ${data.count} domains from asset $assetFile")
             } catch (e: Exception) {
@@ -231,7 +270,6 @@ object DomainBlocklist {
 
     private fun blocklistUrlForMode(mode: String): String {
         val suffix = when (mode) {
-            MODE_LIGHT -> MODE_LIGHT
             MODE_STRICT -> MODE_STRICT
             else -> MODE_STANDARD
         }
@@ -240,35 +278,54 @@ object DomainBlocklist {
 
     private fun normalizeMode(requestedMode: String?): String {
         return when (requestedMode?.lowercase(Locale.US)) {
-            MODE_LIGHT -> MODE_LIGHT
             MODE_STRICT -> MODE_STRICT
             MODE_STANDARD -> MODE_STANDARD
+            MODE_LIGHT -> MODE_STANDARD
             else -> DEFAULT_MODE
         }
     }
 
-    internal fun buildBlocklistDataFromStream(stream: java.io.InputStream, mode: String): BlocklistData {
-        val exact = HashSet<String>()
-        val suffix = HashSet<String>()
+    internal fun buildBlocklistDataFromStream(
+        stream: java.io.InputStream,
+        mode: String,
+        category: Category
+    ): BlocklistData {
+        val exact = LinkedHashMap<String, Category>()
+        val suffix = LinkedHashMap<String, Category>()
+        val allowExact = HashSet<String>()
+        val allowSuffix = HashSet<String>()
         val sample = ArrayList<String>()
 
         stream.bufferedReader().useLines { lines ->
             lines.mapNotNull { normalizeDomain(it) }.forEach { entry ->
                 if (sample.size < 5) sample.add(entry.rawValue)
-                if (!entry.isWildcard) {
-                    exact.add(entry.domain)
+                if (entry.isAllowlist) {
+                    if (entry.matchSubdomains) {
+                        allowSuffix.add(entry.domain)
+                    } else {
+                        allowExact.add(entry.domain)
+                    }
+                    return@forEach
                 }
+
                 if (entry.matchSubdomains) {
-                    suffix.add(entry.domain)
+                    suffix.putIfAbsent(entry.domain, category)
+                } else {
+                    exact.putIfAbsent(entry.domain, category)
                 }
             }
         }
 
-        return BlocklistData(mode, exact, suffix, sample)
+        return BlocklistData(mode, exact, suffix, allowExact, allowSuffix, sample)
     }
 
     private fun normalizeDomain(raw: String): NormalizedDomain? {
-        val cleaned = raw.substringBefore('#').trim().lowercase(Locale.US)
+        val withoutComment = raw.substringBefore('#').trim()
+        if (withoutComment.isEmpty()) return null
+
+        val isAllowlist = withoutComment.startsWith("@@")
+        val withoutPrefix = if (isAllowlist) withoutComment.removePrefix("@@") else withoutComment
+        val cleaned = withoutPrefix.trim().lowercase(Locale.US)
         if (cleaned.isEmpty()) return null
         val isWildcard = cleaned.startsWith("*.")
         val stripped = when {
@@ -277,27 +334,76 @@ object DomainBlocklist {
             else -> cleaned
         }
         if (stripped.isEmpty()) return null
-        return NormalizedDomain(stripped, isWildcard || stripped.contains('.'), isWildcard)
+        return NormalizedDomain(stripped, isWildcard || stripped.contains('.'), isWildcard, isAllowlist)
     }
 
     internal data class NormalizedDomain(
         val domain: String,
         val matchSubdomains: Boolean,
         val isWildcard: Boolean,
+        val isAllowlist: Boolean,
         val rawValue: String = domain
     )
 
     internal fun combineBlocklists(blocklists: List<BlocklistData>, mode: String): BlocklistData {
-        if (blocklists.isEmpty()) return BlocklistData(mode, emptySet(), emptySet(), emptyList())
-        val exact = HashSet<String>()
-        val suffix = HashSet<String>()
+        if (blocklists.isEmpty()) {
+            return BlocklistData(mode, emptyMap(), emptyMap(), emptySet(), emptySet(), emptyList())
+        }
+        val exact = LinkedHashMap<String, Category>()
+        val suffix = LinkedHashMap<String, Category>()
+        val allowExact = HashSet<String>()
+        val allowSuffix = HashSet<String>()
         val sample = ArrayList<String>()
         blocklists.forEach { data ->
-            exact.addAll(data.exact)
-            suffix.addAll(data.suffixes)
+            data.exact.forEach { (domain, category) -> exact.putIfAbsent(domain, category) }
+            data.suffixes.forEach { (domain, category) -> suffix.putIfAbsent(domain, category) }
+            allowExact.addAll(data.allowExact)
+            allowSuffix.addAll(data.allowSuffixes)
             data.sample.take(5 - sample.size).forEach { sample.add(it) }
         }
-        return BlocklistData(mode, exact, suffix, sample)
+        return BlocklistData(mode, exact, suffix, allowExact, allowSuffix, sample)
+    }
+
+    internal fun evaluate(domain: String, data: BlocklistData): Decision {
+        val normalized = domain.lowercase(Locale.US)
+        var current = normalized
+        var blockedMatch: BlockMatch? = null
+        while (current.isNotEmpty()) {
+            if (isAllowedEntry(current, data)) {
+                return Decision(data.mode, allowedRule = current)
+            }
+
+            if (blockedMatch == null) {
+                data.exact[current]?.let { blockedMatch = BlockMatch(current, it, MatchType.EXACT) }
+                if (blockedMatch == null) {
+                    data.suffixes[current]?.let { blockedMatch = BlockMatch(current, it, MatchType.SUFFIX) }
+                }
+            }
+
+            val dotIndex = current.indexOf('.')
+            if (dotIndex == -1) break
+            current = current.substring(dotIndex + 1)
+        }
+        return if (blockedMatch != null) Decision(data.mode, blockedMatch = blockedMatch) else Decision(data.mode)
+    }
+
+    @Synchronized
+    fun addExtraSource(inputStream: InputStream, category: Category) {
+        val currentMode = currentBlocklist.get().mode
+        val additional = buildBlocklistDataFromStream(inputStream, currentMode, category)
+        val merged = combineBlocklists(listOf(currentBlocklist.get(), additional), currentMode)
+        replaceBlocklist(merged)
+        logLoadResult("extra source", additional)
+    }
+
+    private fun isAllowedEntry(domain: String, data: BlocklistData): Boolean {
+        if (data.allowExact.contains(domain)) return true
+        if (data.allowSuffixes.contains(domain)) return true
+
+        // Built-in allowlist is only applied in standard mode for backward compatibility.
+        if (data.mode == MODE_STANDARD && defaultAllowlist.contains(domain)) return true
+
+        return false
     }
 
     private fun replaceBlocklist(newData: BlocklistData) {
