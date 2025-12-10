@@ -1,20 +1,7 @@
 import 'package:flutter/material.dart';
-// Убедись, что путь к контроллеру верный
+
 import '../logic/protection_controller.dart';
 import 'strings.dart';
-
-// Мы определяем класс Strings прямо здесь, чтобы избежать ошибки импорта.
-// Если у тебя есть файл strings.dart, проверь, что класс в нем называется именно 'Strings'.
-class Strings {
-  static const String vpnActive = 'Защита активна';
-  static const String vpnInactive = 'Защита отключена';
-  static const String protectionMode = 'Режим';
-  static const String filterTemporarilyDisabled = 'Фильтрация временно отключена';
-  static const String filterActive = 'Фильтрация работает';
-  static const String blockedTotal = 'Всего заблокировано';
-  static const String blockedSession = 'За сессию';
-  static const String recentBlockedDomains = 'Последние заблокированные';
-}
 
 class StatsPage extends StatefulWidget {
   final ProtectionController controller;
@@ -42,6 +29,82 @@ class _StatsPageState extends State<StatsPage> {
     setState(() {});
   }
 
+  void _showRecent(BuildContext context, List<BlockedEntry> items) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(AppStrings.recent.header, style: Theme.of(ctx).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: items.length,
+                    separatorBuilder: (_, __) => const Divider(height: 8),
+                    itemBuilder: (_, index) {
+                      final entry = items.reversed.elementAt(index);
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.public, size: 20),
+                        title: Text(entry.domain),
+                        subtitle: Text(_formatTimestamp(entry.timestamp)),
+                      );
+                    },
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      Navigator.of(ctx).maybePop();
+                      widget.controller.clearRecentBlocks();
+                    },
+                    icon: const Icon(Icons.delete_outline),
+                    label: Text(AppStrings.actions.clearRecent),
+                  ),
+                )
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatTimestamp(DateTime timestamp) {
+    final local = timestamp.toLocal();
+    final now = DateTime.now();
+    final diff = now.difference(local);
+
+    if (diff.inMinutes < 1) return AppStrings.recent.timestampJustNow;
+
+    if (now.day == local.day && now.month == local.month && now.year == local.year) {
+      return _formatTime(local);
+    }
+
+    final yesterday = now.subtract(const Duration(days: 1));
+    if (yesterday.day == local.day && yesterday.month == local.month && yesterday.year == local.year) {
+      return AppStrings.recent.yesterday;
+    }
+
+    if (diff.inDays < 7) {
+      return '${diff.inDays} ${AppStrings.recent.daysAgoSuffix}';
+    }
+
+    return '${local.day.toString().padLeft(2, '0')}.${local.month.toString().padLeft(2, '0')} ${_formatTime(local)}';
+  }
+
+  String _formatTime(DateTime value) {
+    final hours = value.hour.toString().padLeft(2, '0');
+    final minutes = value.minute.toString().padLeft(2, '0');
+    return '$hours:$minutes';
+  }
+
   @override
   Widget build(BuildContext context) {
     // Используем геттеры, которые мы добавили в контроллер на предыдущем шаге
@@ -51,13 +114,24 @@ class _StatsPageState extends State<StatsPage> {
     final mode = stats.modeName;
     final isStrict =
         stats.mode == ProtectionMode.advanced || stats.mode == ProtectionMode.ultra;
+    final modeSummary = () {
+      switch (stats.mode) {
+        case ProtectionMode.ultra:
+          return AppStrings.modes.ultraSummary;
+        case ProtectionMode.advanced:
+          return AppStrings.modes.strictSummary;
+        case ProtectionMode.standard:
+        default:
+          return AppStrings.modes.standardSummary;
+      }
+    }();
 
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Статистика и домены'),
+        title: const Text(AppStrings.stats.headerTitle),
       ),
       body: RefreshIndicator(
         onRefresh: () async => widget.controller.refreshStats(),
@@ -89,22 +163,24 @@ class _StatsPageState extends State<StatsPage> {
                         const SizedBox(width: 8),
                         Text(
                           vpnActive
-                              ? Strings.vpnActive
-                              : Strings.vpnInactive,
+                              ? AppStrings.stats.vpnActive
+                              : AppStrings.stats.vpnInactive,
                           style: textTheme.titleMedium,
                         ),
                       ],
                     ),
                     const SizedBox(height: 4),
+                    Text('${AppStrings.stats.protectionMode}: $mode', style: textTheme.bodyMedium),
+                    const SizedBox(height: 2),
                     Text(
-                      '${Strings.protectionMode}: $mode',
-                      style: textTheme.bodyMedium,
+                      modeSummary,
+                      style: textTheme.bodySmall?.copyWith(color: colorScheme.onSecondaryContainer),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       failOpen
-                          ? Strings.filterTemporarilyDisabled
-                          : Strings.filterActive,
+                          ? AppStrings.stats.filterTemporarilyDisabled
+                          : AppStrings.stats.filterActive,
                       style: TextStyle(
                         color:
                             failOpen ? Colors.orangeAccent : Colors.greenAccent,
@@ -119,8 +195,8 @@ class _StatsPageState extends State<StatsPage> {
               const SizedBox(height: 12),
               _StrictModeBanner(
                 message: stats.mode == ProtectionMode.ultra
-                    ? AppStrings.ultraModeActiveBanner
-                    : AppStrings.strictModeActiveBanner,
+                    ? AppStrings.modes.ultraModeWarning
+                    : AppStrings.modes.strictModeWarning,
               ),
             ],
             const SizedBox(height: 12),
@@ -133,23 +209,28 @@ class _StatsPageState extends State<StatsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '${Strings.blockedTotal}: ${stats.totalBlocked}',
-                      style: textTheme.bodyLarge,
-                    ),
+                    Text('${AppStrings.stats.blockedTotal}: ${stats.totalBlocked}',
+                        style: textTheme.bodyLarge),
                     const SizedBox(height: 4),
-                    Text(
-                      '${Strings.blockedSession}: ${stats.sessionBlocked}',
-                      style: textTheme.bodyLarge,
-                    ),
+                    Text('${AppStrings.stats.blockedSession}: ${stats.sessionBlocked}',
+                        style: textTheme.bodyLarge),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 12),
-            Text(
-              Strings.recentBlockedDomains,
-              style: textTheme.titleMedium,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  AppStrings.recent.lastBlocked,
+                  style: textTheme.titleMedium,
+                ),
+                TextButton(
+                  onPressed: stats.recentDomains.isEmpty ? null : () => _showRecent(context, stats.recentDomains),
+                  child: Text(AppStrings.stats.showAll),
+                )
+              ],
             ),
             const SizedBox(height: 8),
             if (stats.recentDomains.isEmpty)
@@ -157,7 +238,7 @@ class _StatsPageState extends State<StatsPage> {
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Text(
-                    'Пока ничего не заблокировано — вы в чистом интернете 😌',
+                    AppStrings.recent.empty,
                     style: textTheme.bodyMedium,
                     textAlign: TextAlign.center,
                   ),
@@ -167,13 +248,12 @@ class _StatsPageState extends State<StatsPage> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: stats.recentDomains.map((entry) {
-                  // ИСПРАВЛЕНИЕ: entry - это объект BlockedEntry. 
+                  // ИСПРАВЛЕНИЕ: entry - это объект BlockedEntry.
                   // Нам нужно достать из него поле .domain
                   return ListTile(
                     leading: const Icon(Icons.public, size: 20),
                     title: Text(entry.domain),
-                    // Можно добавить время блокировки, если нужно:
-                    // subtitle: Text(entry.timestamp.toString()), 
+                    subtitle: Text(_formatTimestamp(entry.timestamp)),
                     dense: true,
                   );
                 }).toList(),
