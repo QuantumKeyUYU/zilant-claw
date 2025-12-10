@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../logic/protection_controller.dart';
 import 'stats_page.dart';
 import 'strings.dart';
+import 'protection_info_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.controller});
@@ -52,6 +53,12 @@ class _HomePageState extends State<HomePage> {
     await widget.controller.resetStats();
   }
 
+  Future<void> _openProtectionInfo(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ProtectionInfoPage()),
+    );
+  }
+
   Future<void> _goToStats(BuildContext context) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -90,6 +97,13 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Text(AppStrings.title),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.verified_user_outlined),
+            tooltip: AppStrings.openPrivacyGuide,
+            onPressed: () => _openProtectionInfo(context),
+          )
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _refreshStats,
