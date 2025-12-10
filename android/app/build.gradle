@@ -48,6 +48,10 @@ android {
     }
 }
 
+dependencies {
+    testImplementation "junit:junit:4.13.2"
+}
+
 // Говорим Flutter-плагину, где лежит проект
 flutter {
     source = "../.."

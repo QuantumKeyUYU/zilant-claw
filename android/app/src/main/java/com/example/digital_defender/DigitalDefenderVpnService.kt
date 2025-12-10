@@ -330,22 +330,26 @@ class DigitalDefenderVpnService : VpnService() {
             val query = extractQuery(packet, dnsOffset, dnsLength)
             if (query == null) {
                 if (DEBUG_DNS) {
-                Log.d(TAG, "DNS query: <parse_error> -> PARSE_ERROR")
+                    Log.d(TAG, "DNS query: domain=<parse_error> decision=PARSE_ERROR")
                 }
                 forwardToUpstream(packet, length, ihl, srcPort, destPort, dnsOffset, dnsLength)
                 return
             }
 
             val domain = query.domain
-            if (!failOpen && blocklist.isBlocked(domain)) {
+            val mode = DomainBlocklist.getProtectionMode(applicationContext)
+            val allowedByPolicy = blocklist.isAllowed(domain)
+            val shouldBlock = !failOpen && !allowedByPolicy && blocklist.isBlocked(domain)
+            if (shouldBlock) {
                 if (DEBUG_DNS) {
-                    Log.d(TAG, "DNS query: $domain -> BLOCKED")
+                    Log.d(TAG, "DNS query: domain=$domain decision=BLOCKED mode=$mode")
                 }
                 recordBlockedDomain(domain)
                 sendBlockedResponse(packet, ihl, srcPort, destPort, dnsOffset, query.questionEnd)
             } else {
                 if (DEBUG_DNS) {
-                    Log.d(TAG, "DNS query: $domain -> ALLOWED${if (failOpen) " (fail-open)" else ""}")
+                    val decision = if (allowedByPolicy) "ALLOWED (allowlist)" else "ALLOWED${if (failOpen) " (fail-open)" else ""}"
+                    Log.d(TAG, "DNS query: domain=$domain decision=$decision mode=$mode")
                 }
                 forwardToUpstream(packet, length, ihl, srcPort, destPort, dnsOffset, dnsLength)
             }
@@ -605,7 +609,7 @@ class DigitalDefenderVpnService : VpnService() {
         private const val CHANNEL_ID = "digital_defender_vpn"
         private const val NOTIFICATION_ID = 1
         internal const val TAG = "DigitalDefenderVpnService"
-        private const val DEBUG_DNS = true
+        private const val DEBUG_DNS = false
         internal const val PREFS_NAME = "digital_defender_prefs"
         internal const val KEY_BLOCKED_COUNT = "blocked_count"
         internal const val KEY_SESSION_BLOCKED_COUNT = "session_blocked_count"

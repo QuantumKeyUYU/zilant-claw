@@ -24,6 +24,45 @@ class AppStrings {
       'Приложение не собирает личные данные и не отправляет никакую аналитику наружу.';
   static const String infoControl =
       'Вы в любой момент можете отключить защиту — она не внедряется в системные файлы.';
+  static const String infoChecklistTitle =
+      'Чек-лист как усилить приватность телефона';
+  static const String infoHardwareTitle = 'Утверждаем доверие железа и прошивки';
+  static const String infoHardware1 =
+      'Включите проверенную загрузку (verified boot) со своими ключами и запретом отката прошивки.';
+  static const String infoHardware2 =
+      'Отключите лишние радиоинтерфейсы (второй SIM, NFC, UWB) и по возможности используйте аппаратные тумблеры.';
+  static const String infoHardware3 =
+      'Ставьте прошивки с воспроизводимыми сборками и открытыми diff — проверяйте подписи перед установкой.';
+  static const String infoNetworkTitle = 'Прячем сетевой след';
+  static const String infoNetwork1 =
+      'Пропускайте трафик через VPN/меш или Tor, включайте жёсткий kill-switch при обрыве туннеля.';
+  static const String infoNetwork2 =
+      'Используйте DoH/DoT вместо открытого DNS, отключите captive-пинг и прочую телеметрию системы.';
+  static const String infoNetwork3 =
+      'Рандомизируйте MAC-адрес при сканировании Wi‑Fi и очищайте список известных сетей.';
+  static const String infoPermissionsTitle = 'Давим разрешения и сенсоры';
+  static const String infoPermissions1 =
+      'Брокер разрешений с тайм-аутами: микрофон/камера только на время, автосброс в фоне.';
+  static const String infoPermissions2 =
+      'Файрвол для датчиков: микрофон/камера/GPS/акселерометр только по запросу, с журналом обращений.';
+  static const String infoPermissions3 =
+      'Запрет фоновых служб без явного whitelist, блок динамической загрузки кода в приложениях.';
+  static const String infoUxTitle = 'Делаем контроль видимым';
+  static const String infoUx1 =
+      'HUD-индикатор: кто и когда использует камеру, микрофон, геопозицию, VPN/Tor и радиомодули.';
+  static const String infoUx2 =
+      'Журнал событий с экспортом: выдачи разрешений, доступ к сенсорам, смены сетевого состояния.';
+  static const String infoUx3 =
+      'Профили (Стелс/Поездка/Гость): разные политики для радиомодулей, блок-листов и сенсоров.';
+  static const String infoSupplyTitle = 'Обновления и цепочка поставки';
+  static const String infoSupply1 =
+      'Подписанные OTA с прозрачным логом и проверяемыми хэшами; предупреждать о смене ключей.';
+  static const String infoSupply2 =
+      'Храните ключи в защищённом элементе, разделяйте рабочие/личные/гостевые профили ключей.';
+  static const String infoSupply3 =
+      'Ред-тим самотесты: проверка утечки DNS, падения VPN, попытки доступа к микрофону в фоне.';
+
+  static const String openPrivacyGuide = 'Гид по приватности';
 
   static const String protectionEnabled = 'Защита: включена';
   static const String protectionDisabled = 'Защита: выключена';

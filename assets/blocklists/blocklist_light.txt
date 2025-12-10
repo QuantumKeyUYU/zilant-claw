@@ -42,3 +42,6 @@ telemetry.microsoft.com
 api.amplitude.com
 api2.amplitude.com
 mobile.pipe.aria.microsoft.com
+intake.logs.datadoghq.com
+data.flurry.com
+config.edge.skype.com

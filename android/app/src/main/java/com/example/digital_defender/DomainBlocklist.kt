@@ -6,6 +6,8 @@ import java.io.FileNotFoundException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.concurrent.thread
 
 object DomainBlocklist {
     private const val TAG = "DomainBlocklist"
@@ -15,44 +17,59 @@ object DomainBlocklist {
     const val MODE_STRICT = "strict"
     private const val DEFAULT_MODE = MODE_STANDARD
     private const val BLOCKLIST_BASE_URL = "https://example.com/digital-defender/blocklist"
+
     private val assetFiles = mapOf(
-        MODE_LIGHT to "blocklists/blocklist_light.txt",
-        MODE_STANDARD to "blocklists/blocklist_standard.txt",
-        MODE_STRICT to "blocklists/blocklist_strict.txt"
+        MODE_LIGHT to listOf("blocklists/blocklist_light.txt"),
+        MODE_STANDARD to listOf(
+            "blocklists/blocklist_light.txt",
+            "blocklists/blocklist_standard.txt"
+        ),
+        MODE_STRICT to listOf(
+            "blocklists/blocklist_light.txt",
+            "blocklists/blocklist_standard.txt",
+            "blocklists/blocklist_strict.txt"
+        )
     )
+
     private val localFiles = mapOf(
-        MODE_LIGHT to "blocklist_light.txt",
-        MODE_STANDARD to "blocklist_standard.txt",
-        MODE_STRICT to "blocklist_strict.txt"
+        MODE_LIGHT to listOf("blocklist_light.txt"),
+        MODE_STANDARD to listOf("blocklist_light.txt", "blocklist_standard.txt"),
+        MODE_STRICT to listOf("blocklist_light.txt", "blocklist_standard.txt", "blocklist_strict.txt")
     )
-    private val domains = HashSet<String>()
+
+    private val allowlist = setOf(
+        "google.com",
+        "www.google.com",
+        "yandex.ru",
+        "www.yandex.ru"
+    )
+
+    data class BlocklistData(
+        val mode: String,
+        val exact: Set<String>,
+        val suffixes: Set<String>,
+        val sample: List<String>
+    ) {
+        val count: Int = exact.size + suffixes.size
+    }
+
+    private val currentBlocklist = AtomicReference(
+        BlocklistData(DEFAULT_MODE, emptySet(), emptySet(), emptyList())
+    )
+
     @Volatile
     private var initialized = false
-    @Volatile
-    private var initializedMode: String = DEFAULT_MODE
 
-    @Synchronized
     fun init(context: Context) {
         val mode = getProtectionMode(context)
-        if (initialized && domains.isNotEmpty() && initializedMode == mode) return
-        initializedMode = mode
-        val loadedFromLocal = loadFromLocalFile(context, mode)
-        val loadedFromAsset = if (!loadedFromLocal) loadFromAsset(context, mode) else false
-
-        when {
-            loadedFromLocal -> Log.i(TAG, "Loaded ${domains.size} domains from local file ${localFiles[mode]}")
-            loadedFromAsset -> Log.i(TAG, "Loaded ${domains.size} domains from assets/${assetFiles[mode]}")
-            else -> Log.w(TAG, "Failed to load blocklist; continuing with empty list")
-        }
-        if (domains.isEmpty()) {
-            ensureFallbackList(context, mode)
-        }
+        if (initialized && currentBlocklist.get().mode == mode) return
+        loadAsyncForMode(context, mode)
     }
 
     fun refreshFromNetwork(context: Context): Boolean {
         val mode = getProtectionMode(context)
         val url = blocklistUrlForMode(mode)
-        try {
+        return try {
             val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = 5000
@@ -71,39 +88,41 @@ object DomainBlocklist {
                 return false
             }
 
-            val parsed = body.byteInputStream().use { parseStream(it) }
-            if (parsed.isEmpty()) {
+            val parsed = body.byteInputStream().use { buildBlocklistDataFromStream(it, mode) }
+            if (parsed.count == 0) {
                 Log.w(TAG, "Failed to refresh blocklist: parsed empty list from $url")
                 return false
             }
 
-            val localFile = localFiles[mode] ?: return false
+            val localFile = localFiles[mode]?.lastOrNull() ?: return false
             context.openFileOutput(localFile, Context.MODE_PRIVATE).use { output ->
                 output.write(body.toByteArray())
             }
 
-            synchronized(this) {
-                replaceDomains(parsed)
-                initialized = true
-                initializedMode = mode
-                Log.i(TAG, "Refreshed blocklist from $url, ${domains.size} domains")
-            }
-            if (domains.isEmpty()) {
-                ensureFallbackList(context, mode)
-            }
-            return domains.isNotEmpty()
+            replaceBlocklist(parsed)
+            logLoadResult("network $url", parsed)
+            true
         } catch (e: Exception) {
             Log.w(TAG, "Failed to refresh blocklist from $url", e)
             ensureFallbackList(context, mode)
-            return domains.isNotEmpty()
+            initialized && currentBlocklist.get().count > 0
         }
     }
 
     fun isBlocked(domain: String): Boolean {
-        val lower = domain.lowercase(Locale.US)
-        var current = lower
+        if (!initialized) return false
+        val data = currentBlocklist.get()
+        return isBlocked(domain, data)
+    }
+
+    internal fun isBlocked(domain: String, data: BlocklistData): Boolean {
+        val normalized = domain.lowercase(Locale.US)
+        if (isAllowed(normalized)) return false
+
+        var current = normalized
         while (current.isNotEmpty()) {
-            if (domains.contains(current)) return true
+            if (data.exact.contains(current)) return true
+            if (data.suffixes.contains(current)) return true
             val dotIndex = current.indexOf('.')
             if (dotIndex == -1) break
             current = current.substring(dotIndex + 1)
@@ -111,63 +130,80 @@ object DomainBlocklist {
         return false
     }
 
-    private fun normalizeDomain(raw: String): String? {
-        val cleaned = raw.substringBefore('#').trim().lowercase(Locale.US)
-        if (cleaned.isEmpty()) return null
-        val withoutPrefix = when {
-            cleaned.startsWith("*.") -> cleaned.removePrefix("*.")
-            cleaned.startsWith('.') -> cleaned.removePrefix(".")
-            else -> cleaned
+    fun isAllowed(domain: String): Boolean {
+        val normalized = domain.lowercase(Locale.US)
+        var current = normalized
+        while (current.isNotEmpty()) {
+            if (allowlist.contains(current)) return true
+            val dotIndex = current.indexOf('.')
+            if (dotIndex == -1) break
+            current = current.substring(dotIndex + 1)
         }
-        return withoutPrefix.takeIf { it.isNotEmpty() }
+        return false
     }
 
-    @Synchronized
-    private fun loadFromLocalFile(context: Context, mode: String): Boolean {
-        val localFile = localFiles[mode] ?: return false
-        return try {
-            val loaded = parseStream(context.openFileInput(localFile))
-            replaceDomains(loaded)
-            initialized = true
-            initializedMode = mode
-            Log.d(TAG, "Loaded ${loaded.size} domains from internal storage")
-            true
-        } catch (e: FileNotFoundException) {
-            if (mode == MODE_STANDARD && localFile != "blocklist.txt") {
-                return try {
-                    val legacyLoaded = parseStream(context.openFileInput("blocklist.txt"))
-                    replaceDomains(legacyLoaded)
-                    initialized = true
-                    initializedMode = mode
-                    Log.i(TAG, "Loaded ${legacyLoaded.size} domains from legacy local file blocklist.txt")
-                    true
-                } catch (_: Exception) {
-                    Log.i(TAG, "Local blocklist $localFile not found; will fall back to assets")
-                    false
-                }
+    private fun loadAsyncForMode(context: Context, mode: String) {
+        thread(name = "DomainBlocklistLoader-$mode", start = true) {
+            val loadedFromLocal = loadFromLocalFile(context, mode)
+            val loadedFromAsset = if (!loadedFromLocal) loadFromAsset(context, mode) else false
+
+            if (!loadedFromLocal && !loadedFromAsset) {
+                Log.w(TAG, "Failed to load blocklist; continuing with empty list")
             }
-            Log.i(TAG, "Local blocklist $localFile not found; will fall back to assets")
-            false
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to load blocklist from local file $localFile", e)
-            false
         }
     }
 
-    @Synchronized
-    private fun loadFromAsset(context: Context, mode: String): Boolean {
-        val assetFile = assetFiles[mode] ?: return false
-        return try {
-            val loaded = parseStream(context.assets.open(assetFile))
-            replaceDomains(loaded)
-            initialized = true
-            initializedMode = mode
-            Log.d(TAG, "Loaded ${loaded.size} domains from assets")
-            true
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to load blocklist from assets/$assetFile", e)
-            false
+    private fun loadFromLocalFile(context: Context, mode: String): Boolean {
+        val files = localFiles[mode] ?: return false
+        val loaded = ArrayList<BlocklistData>()
+        files.forEach { localFile ->
+            try {
+                val data = buildBlocklistDataFromStream(context.openFileInput(localFile), mode)
+                loaded.add(data)
+                Log.d(TAG, "Loaded ${data.count} domains from internal storage file $localFile")
+            } catch (e: FileNotFoundException) {
+                if (mode == MODE_STANDARD && localFile == "blocklist_standard.txt") {
+                    try {
+                        val legacyLoaded = buildBlocklistDataFromStream(
+                            context.openFileInput("blocklist.txt"),
+                            mode
+                        )
+                        loaded.add(legacyLoaded)
+                        Log.i(TAG, "Loaded ${legacyLoaded.count} domains from legacy local file blocklist.txt")
+                    } catch (_: Exception) {
+                        Log.i(TAG, "Local blocklist $localFile not found; will fall back to assets")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to load blocklist from local file $localFile", e)
+            }
         }
+
+        if (loaded.isEmpty()) return false
+        val combined = combineBlocklists(loaded, mode)
+        replaceBlocklist(combined)
+        logLoadResult("local files", combined)
+        return true
+    }
+
+    private fun loadFromAsset(context: Context, mode: String): Boolean {
+        val files = assetFiles[mode] ?: return false
+        val loaded = ArrayList<BlocklistData>()
+        files.forEach { assetFile ->
+            try {
+                val data = buildBlocklistDataFromStream(context.assets.open(assetFile), mode)
+                loaded.add(data)
+                Log.d(TAG, "Loaded ${data.count} domains from asset $assetFile")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to load blocklist from assets/$assetFile", e)
+            }
+        }
+
+        if (loaded.isEmpty()) return false
+        val combined = combineBlocklists(loaded, mode)
+        replaceBlocklist(combined)
+        logLoadResult("assets", combined)
+        return true
     }
 
     fun getProtectionMode(context: Context): String {
@@ -184,17 +220,13 @@ object DomainBlocklist {
         val normalized = normalizeMode(requestedMode)
         val prefs = context.getSharedPreferences(DigitalDefenderVpnService.PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putString(PREFS_KEY_PROTECTION_MODE, normalized).apply()
-        synchronized(this) {
-            initialized = false
-        }
+        initialized = false
         return normalized
     }
 
     fun reloadForMode(context: Context) {
-        synchronized(this) {
-            initialized = false
-        }
-        init(context)
+        initialized = false
+        loadAsyncForMode(context, getProtectionMode(context))
     }
 
     private fun blocklistUrlForMode(mode: String): String {
@@ -215,22 +247,76 @@ object DomainBlocklist {
         }
     }
 
-    private fun parseStream(stream: java.io.InputStream): Set<String> {
-        return stream.bufferedReader().useLines { lines ->
-            lines.mapNotNull { normalizeDomain(it) }.toSet()
+    internal fun buildBlocklistDataFromStream(stream: java.io.InputStream, mode: String): BlocklistData {
+        val exact = HashSet<String>()
+        val suffix = HashSet<String>()
+        val sample = ArrayList<String>()
+
+        stream.bufferedReader().useLines { lines ->
+            lines.mapNotNull { normalizeDomain(it) }.forEach { entry ->
+                if (sample.size < 5) sample.add(entry.rawValue)
+                if (!entry.isWildcard) {
+                    exact.add(entry.domain)
+                }
+                if (entry.matchSubdomains) {
+                    suffix.add(entry.domain)
+                }
+            }
         }
+
+        return BlocklistData(mode, exact, suffix, sample)
     }
 
-    @Synchronized
-    private fun replaceDomains(newDomains: Set<String>) {
-        domains.clear()
-        domains.addAll(newDomains)
+    private fun normalizeDomain(raw: String): NormalizedDomain? {
+        val cleaned = raw.substringBefore('#').trim().lowercase(Locale.US)
+        if (cleaned.isEmpty()) return null
+        val isWildcard = cleaned.startsWith("*.")
+        val stripped = when {
+            isWildcard -> cleaned.removePrefix("*.")
+            cleaned.startsWith('.') -> cleaned.removePrefix(".")
+            else -> cleaned
+        }
+        if (stripped.isEmpty()) return null
+        return NormalizedDomain(stripped, isWildcard || stripped.contains('.'), isWildcard)
+    }
+
+    internal data class NormalizedDomain(
+        val domain: String,
+        val matchSubdomains: Boolean,
+        val isWildcard: Boolean,
+        val rawValue: String = domain
+    )
+
+    internal fun combineBlocklists(blocklists: List<BlocklistData>, mode: String): BlocklistData {
+        if (blocklists.isEmpty()) return BlocklistData(mode, emptySet(), emptySet(), emptyList())
+        val exact = HashSet<String>()
+        val suffix = HashSet<String>()
+        val sample = ArrayList<String>()
+        blocklists.forEach { data ->
+            exact.addAll(data.exact)
+            suffix.addAll(data.suffixes)
+            data.sample.take(5 - sample.size).forEach { sample.add(it) }
+        }
+        return BlocklistData(mode, exact, suffix, sample)
+    }
+
+    private fun replaceBlocklist(newData: BlocklistData) {
+        currentBlocklist.set(newData)
+        initialized = true
     }
 
     private fun ensureFallbackList(context: Context, mode: String) {
-        if (domains.isNotEmpty()) return
+        if (initialized && currentBlocklist.get().count > 0) return
         val loadedLocal = loadFromLocalFile(context, mode)
         if (loadedLocal) return
         loadFromAsset(context, mode)
+    }
+
+    private fun logLoadResult(source: String, data: BlocklistData) {
+        val preview = data.sample.joinToString(limit = 5, separator = ", ")
+        Log.i(
+            TAG,
+            "Blocklist loaded from $source for mode=${data.mode}, domains=${data.count}, sample=[${preview}]"
+        )
     }
 }
