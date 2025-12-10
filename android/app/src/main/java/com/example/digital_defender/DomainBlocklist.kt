@@ -77,7 +77,7 @@ object DomainBlocklist {
                 val isAllow = line.startsWith("@@")
                 val content = if (isAllow) line.removePrefix("@@") else line
 
-                if (content.startsWith("*\.")) {
+                if (content.startsWith("*\\.")) {
                     val domain = content.removePrefix("*.").lowercase()
                     if (domain.isNotBlank()) {
                         if (isAllow) allowWildcard.add(domain) else blockedWildcard.add(domain)

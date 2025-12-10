@@ -339,14 +339,14 @@ class DigitalDefenderVpnService : VpnService() {
 
             val domain = query.domain
             val evaluation = blocklist.evaluate(domain)
-            val mode = evaluation.mode
-            val allowedByPolicy = evaluation.allowedRule != null
+            val mode = DomainBlocklist.getProtectionMode(vpnService)
             val shouldBlock = !failOpen && evaluation.isBlocked
+
             if (shouldBlock) {
                 if (DEBUG_DNS) {
                     Log.d(
                         TAG,
-                        "DNS query: domain=$domain decision=BLOCKED mode=$mode reason=${evaluation.blockedMatch?.category}:${evaluation.blockedMatch?.rule}"
+                        "DNS query: domain=$domain decision=BLOCKED mode=$mode reason=blocked_by_list"
                     )
                 }
                 recordBlockedDomain(domain)
@@ -358,13 +358,16 @@ class DigitalDefenderVpnService : VpnService() {
                         failOpen -> "ALLOWED_FAILOPEN"
                         else -> "ALLOWED"
                     }
+
                     val reason = when {
-                        allowedByPolicy -> "allowlist:${evaluation.allowedRule}"
-                        evaluation.blockedMatch != null -> "blocked:${evaluation.blockedMatch.category}:${evaluation.blockedMatch.rule}"
                         failOpen -> "fail-open"
-                        else -> "not_listed"
+                        else -> "not_listed_or_allowlist"
                     }
-                    Log.d(TAG, "DNS query: domain=$domain decision=$decision mode=$mode reason=$reason")
+
+                    Log.d(
+                        TAG,
+                        "DNS query: domain=$domain decision=$decision mode=$mode reason=$reason"
+                    )
                 }
                 forwardToUpstream(packet, length, ihl, srcPort, destPort, dnsOffset, dnsLength)
             }
