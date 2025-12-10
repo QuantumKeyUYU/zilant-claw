@@ -337,19 +337,33 @@ class DigitalDefenderVpnService : VpnService() {
             }
 
             val domain = query.domain
-            val mode = DomainBlocklist.getProtectionMode(applicationContext)
-            val allowedByPolicy = blocklist.isAllowed(domain)
-            val shouldBlock = !failOpen && !allowedByPolicy && blocklist.isBlocked(domain)
+            val evaluation = blocklist.evaluate(domain)
+            val mode = evaluation.mode
+            val allowedByPolicy = evaluation.allowedRule != null
+            val shouldBlock = !failOpen && evaluation.isBlocked
             if (shouldBlock) {
                 if (DEBUG_DNS) {
-                    Log.d(TAG, "DNS query: domain=$domain decision=BLOCKED mode=$mode")
+                    Log.d(
+                        TAG,
+                        "DNS query: domain=$domain decision=BLOCKED mode=$mode reason=${evaluation.blockedMatch?.category}:${evaluation.blockedMatch?.rule}"
+                    )
                 }
                 recordBlockedDomain(domain)
                 sendBlockedResponse(packet, ihl, srcPort, destPort, dnsOffset, query.questionEnd)
             } else {
                 if (DEBUG_DNS) {
-                    val decision = if (allowedByPolicy) "ALLOWED (allowlist)" else "ALLOWED${if (failOpen) " (fail-open)" else ""}"
-                    Log.d(TAG, "DNS query: domain=$domain decision=$decision mode=$mode")
+                    val decision = when {
+                        shouldBlock -> "BLOCKED"
+                        failOpen -> "ALLOWED_FAILOPEN"
+                        else -> "ALLOWED"
+                    }
+                    val reason = when {
+                        allowedByPolicy -> "allowlist:${evaluation.allowedRule}"
+                        evaluation.blockedMatch != null -> "blocked:${evaluation.blockedMatch.category}:${evaluation.blockedMatch.rule}"
+                        failOpen -> "fail-open"
+                        else -> "not_listed"
+                    }
+                    Log.d(TAG, "DNS query: domain=$domain decision=$decision mode=$mode reason=$reason")
                 }
                 forwardToUpstream(packet, length, ihl, srcPort, destPort, dnsOffset, dnsLength)
             }

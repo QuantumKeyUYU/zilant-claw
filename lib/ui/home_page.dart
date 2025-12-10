@@ -55,7 +55,9 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _openProtectionInfo(BuildContext context) async {
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ProtectionInfoPage()),
+      MaterialPageRoute(
+        builder: (_) => ProtectionInfoPage(mode: widget.controller.mode),
+      ),
     );
   }
 
@@ -285,7 +287,7 @@ class _HomePageState extends State<HomePage> {
               value: currentMode,
               isExpanded: true,
               onChanged: _isChangingMode ? null : (mode) => mode != null ? _changeMode(mode) : null,
-              items: ProtectionMode.values
+              items: const [ProtectionMode.standard, ProtectionMode.advanced]
                   .map(
                     (mode) => DropdownMenuItem(
                       value: mode,
@@ -302,6 +304,33 @@ class _HomePageState extends State<HomePage> {
                   .bodySmall
                   ?.copyWith(color: Colors.grey.shade700, fontWeight: FontWeight.w500),
             ),
+            if (currentMode == ProtectionMode.advanced) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.amber.shade800, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        AppStrings.strictModeWarning,
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: Colors.amber.shade800, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -363,22 +392,18 @@ class _HomePageState extends State<HomePage> {
 
   String _modeLabel(ProtectionMode mode) {
     switch (mode) {
-      case ProtectionMode.light:
-        return AppStrings.protectionModeLight;
       case ProtectionMode.standard:
         return AppStrings.protectionModeStandard;
-      case ProtectionMode.strict:
+      case ProtectionMode.advanced:
         return AppStrings.protectionModeStrict;
     }
   }
 
   String _modeDescription(ProtectionMode mode) {
     switch (mode) {
-      case ProtectionMode.light:
-        return AppStrings.protectionModeHintLight;
       case ProtectionMode.standard:
         return AppStrings.protectionModeHintStandard;
-      case ProtectionMode.strict:
+      case ProtectionMode.advanced:
         return AppStrings.protectionModeHintStrict;
     }
   }

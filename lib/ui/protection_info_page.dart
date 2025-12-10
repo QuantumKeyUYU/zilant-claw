@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../logic/protection_controller.dart';
 import 'strings.dart';
 
 class ProtectionInfoPage extends StatelessWidget {
-  const ProtectionInfoPage({super.key});
+  const ProtectionInfoPage({super.key, required this.mode});
+
+  final ProtectionMode mode;
 
   @override
   Widget build(BuildContext context) {
@@ -20,9 +23,17 @@ class ProtectionInfoPage extends StatelessWidget {
         padding: const EdgeInsets.all(20.0),
         child: ListView(
           children: [
+            if (mode == ProtectionMode.advanced) ...[
+              _StrictModeBanner(message: AppStrings.strictModeActiveBanner),
+              const SizedBox(height: 12),
+            ],
             Text(AppStrings.infoIntro, style: bodyStyle),
             const SizedBox(height: 12),
             Text(AppStrings.infoBlocklist, style: bodyStyle),
+            const SizedBox(height: 12),
+            Text(AppStrings.infoModeStandard, style: bodyStyle),
+            const SizedBox(height: 8),
+            Text(AppStrings.infoModeStrict, style: bodyStyle),
             const SizedBox(height: 12),
             Text(AppStrings.infoPrivacy, style: bodyStyle),
             const SizedBox(height: 12),
@@ -78,6 +89,39 @@ class ProtectionInfoPage extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _StrictModeBanner extends StatelessWidget {
+  const _StrictModeBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.amber.shade200),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.amber.shade800, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: textTheme.bodySmall
+                  ?.copyWith(color: Colors.amber.shade800, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
       ),
     );
   }
