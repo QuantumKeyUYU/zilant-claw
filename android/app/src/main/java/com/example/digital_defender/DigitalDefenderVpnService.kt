@@ -351,7 +351,7 @@ class DigitalDefenderVpnService : VpnService() {
                         "DNS query: domain=$domain decision=BLOCKED mode=$mode reason=blocked_by_list"
                     )
                 }
-                recordBlockedDomain(domain)
+                recordBlockedDomain(domain, evaluation.category)
                 sendBlockedResponse(packet, ihl, srcPort, destPort, dnsOffset, query.questionEnd)
             } else {
                 if (DEBUG_DNS) {
@@ -635,6 +635,11 @@ class DigitalDefenderVpnService : VpnService() {
         internal const val KEY_SESSION_BLOCKED_COUNT = "session_blocked_count"
         internal const val KEY_FAIL_OPEN_ACTIVE = "fail_open_active"
         internal const val KEY_TOTAL_REQUESTS = "total_requests"
+        internal const val KEY_BLOCKED_CLEAN = "blocked_clean"
+        internal const val KEY_BLOCKED_FOCUS = "blocked_focus"
+        internal const val KEY_ATTENTION_ATTEMPTS = "attention_attempts"
+        internal const val KEY_TRACKING_ATTEMPTS = "tracking_attempts"
+        internal const val KEY_DOMAIN_FREQUENCY = "domain_frequency"
         private const val KEY_LAST_BLOCKLIST_UPDATE = "last_blocklist_update"
         internal const val KEY_RECENT_BLOCKS = "recent_blocks"
         internal const val KEY_PROTECTION_ENABLED = "protection_enabled"
@@ -650,8 +655,8 @@ class DigitalDefenderVpnService : VpnService() {
     }
 
     @Synchronized
-    private fun recordBlockedDomain(domain: String) {
-        val update = DigitalDefenderStats.recordBlock(this, domain)
+    private fun recordBlockedDomain(domain: String, category: Category) {
+        val update = DigitalDefenderStats.recordBlock(this, domain, category)
         blockedCount = update.blockedTotal
         sessionBlockedCount = update.sessionBlocked
         Log.i(TAG, "Blocked domain: $domain")
@@ -697,7 +702,8 @@ class DigitalDefenderVpnService : VpnService() {
 
 data class BlockedEntry(
     val domain: String,
-    val timestamp: Long
+    val timestamp: Long,
+    val category: String? = null
 )
 
 object DigitalDefenderStats {
@@ -733,21 +739,51 @@ object DigitalDefenderStats {
     data class StatsUpdate(val blockedTotal: Long, val sessionBlocked: Long)
 
     @Synchronized
-    fun recordBlock(context: Context, domain: String): StatsUpdate {
+    fun recordBlock(context: Context, domain: String, category: Category): StatsUpdate {
         val prefs = context.getSharedPreferences(DigitalDefenderVpnService.PREFS_NAME, Context.MODE_PRIVATE)
         val updatedCount = prefs.getLong(DigitalDefenderVpnService.KEY_BLOCKED_COUNT, 0L) + 1
         val updatedSession = prefs.getLong(DigitalDefenderVpnService.KEY_SESSION_BLOCKED_COUNT, 0L) + 1
         val recent = loadRecent(prefs).apply {
-            add(BlockedEntry(domain, System.currentTimeMillis()))
+            add(BlockedEntry(domain, System.currentTimeMillis(), category.name.lowercase()))
             if (size > MAX_RECENT) {
                 removeAt(0)
             }
+        }
+
+        val domainFrequency = loadDomainFrequency(prefs).apply {
+            val updated = getOrDefault(domain, 0L) + 1
+            put(domain, updated)
+        }
+
+        val cleanBlocked = prefs.getLong(DigitalDefenderVpnService.KEY_BLOCKED_CLEAN, 0L)
+        val focusBlocked = prefs.getLong(DigitalDefenderVpnService.KEY_BLOCKED_FOCUS, 0L)
+        val attentionAttempts = prefs.getLong(DigitalDefenderVpnService.KEY_ATTENTION_ATTEMPTS, 0L)
+        val trackingAttempts = prefs.getLong(DigitalDefenderVpnService.KEY_TRACKING_ATTEMPTS, 0L)
+
+        val updatedCounters = when (category) {
+            Category.CLEAN -> mapOf(
+                DigitalDefenderVpnService.KEY_BLOCKED_CLEAN to cleanBlocked + 1,
+                DigitalDefenderVpnService.KEY_ATTENTION_ATTEMPTS to attentionAttempts + 1
+            )
+            Category.FOCUS -> mapOf(
+                DigitalDefenderVpnService.KEY_BLOCKED_FOCUS to focusBlocked + 1,
+                DigitalDefenderVpnService.KEY_ATTENTION_ATTEMPTS to attentionAttempts + 1
+            )
+            Category.TRACKERS -> mapOf(
+                DigitalDefenderVpnService.KEY_TRACKING_ATTEMPTS to trackingAttempts + 1
+            )
+            Category.ADS -> mapOf(
+                DigitalDefenderVpnService.KEY_ATTENTION_ATTEMPTS to attentionAttempts + 1
+            )
+            else -> emptyMap()
         }
 
         val editor = prefs.edit()
         editor.putLong(DigitalDefenderVpnService.KEY_BLOCKED_COUNT, updatedCount)
         editor.putLong(DigitalDefenderVpnService.KEY_SESSION_BLOCKED_COUNT, updatedSession)
         editor.putString(DigitalDefenderVpnService.KEY_RECENT_BLOCKS, serializeRecent(recent))
+        editor.putString(DigitalDefenderVpnService.KEY_DOMAIN_FREQUENCY, serializeDomainFrequency(domainFrequency))
+        updatedCounters.forEach { (key, value) -> editor.putLong(key, value) }
         editor.apply()
         return StatsUpdate(updatedCount, updatedSession)
     }
@@ -765,16 +801,25 @@ object DigitalDefenderStats {
         val blockedCount = prefs.getLong(DigitalDefenderVpnService.KEY_BLOCKED_COUNT, 0L)
         val totalRequests = prefs.getLong(DigitalDefenderVpnService.KEY_TOTAL_REQUESTS, 0L)
         val sessionBlocked = prefs.getLong(DigitalDefenderVpnService.KEY_SESSION_BLOCKED_COUNT, 0L)
+        val blockedClean = prefs.getLong(DigitalDefenderVpnService.KEY_BLOCKED_CLEAN, 0L)
+        val blockedFocus = prefs.getLong(DigitalDefenderVpnService.KEY_BLOCKED_FOCUS, 0L)
+        val attentionAttempts = prefs.getLong(DigitalDefenderVpnService.KEY_ATTENTION_ATTEMPTS, 0L)
+        val trackingAttempts = prefs.getLong(DigitalDefenderVpnService.KEY_TRACKING_ATTEMPTS, 0L)
         val protectionEnabled = prefs.getBoolean(DigitalDefenderVpnService.KEY_PROTECTION_ENABLED, false)
         val protectionMode = DomainBlocklist.getProtectionMode(context)
         val failOpenActive = prefs.getBoolean(DigitalDefenderVpnService.KEY_FAIL_OPEN_ACTIVE, false)
         val recent = loadRecent(prefs)
+        val domainFrequency = loadDomainFrequency(prefs)
+        val (cleanEnabled, focusEnabled) = DomainBlocklist.getDetoxModes(context)
 
         val recentArray = JSONArray()
         recent.forEach { entry ->
             val jsonEntry = JSONObject()
             jsonEntry.put("domain", entry.domain)
             jsonEntry.put("timestamp", entry.timestamp)
+            if (!entry.category.isNullOrBlank()) {
+                jsonEntry.put("category", entry.category)
+            }
             recentArray.put(jsonEntry)
         }
 
@@ -782,10 +827,17 @@ object DigitalDefenderStats {
         root.put("blockedCount", blockedCount)
         root.put("totalRequests", totalRequests)
         root.put("sessionBlocked", sessionBlocked)
+        root.put("blockedClean", blockedClean)
+        root.put("blockedFocus", blockedFocus)
+        root.put("attentionAttempts", attentionAttempts)
+        root.put("trackingAttempts", trackingAttempts)
         root.put("running", protectionEnabled)
         root.put("mode", protectionMode)
         root.put("failOpenActive", failOpenActive)
         root.put("recent", recentArray)
+        root.put("domainBlockFrequency", JSONObject(domainFrequency))
+        root.put("cleanEnabled", cleanEnabled)
+        root.put("focusEnabled", focusEnabled)
         return root.toString()
     }
 
@@ -796,7 +848,12 @@ object DigitalDefenderStats {
             .putLong(DigitalDefenderVpnService.KEY_BLOCKED_COUNT, 0L)
             .putLong(DigitalDefenderVpnService.KEY_SESSION_BLOCKED_COUNT, 0L)
             .putLong(DigitalDefenderVpnService.KEY_TOTAL_REQUESTS, 0L)
+            .putLong(DigitalDefenderVpnService.KEY_BLOCKED_CLEAN, 0L)
+            .putLong(DigitalDefenderVpnService.KEY_BLOCKED_FOCUS, 0L)
+            .putLong(DigitalDefenderVpnService.KEY_ATTENTION_ATTEMPTS, 0L)
+            .putLong(DigitalDefenderVpnService.KEY_TRACKING_ATTEMPTS, 0L)
             .putString(DigitalDefenderVpnService.KEY_RECENT_BLOCKS, JSONArray().toString())
+            .putString(DigitalDefenderVpnService.KEY_DOMAIN_FREQUENCY, JSONObject().toString())
             .apply()
     }
 
@@ -818,7 +875,8 @@ object DigitalDefenderStats {
                 val obj = array.getJSONObject(index)
                 BlockedEntry(
                     domain = obj.optString("domain", ""),
-                    timestamp = obj.optLong("timestamp", 0L)
+                    timestamp = obj.optLong("timestamp", 0L),
+                    category = obj.optString("category", null)
                 )
             }.filter { it.domain.isNotBlank() }.toMutableList()
         } catch (e: Exception) {
@@ -827,12 +885,43 @@ object DigitalDefenderStats {
         }
     }
 
+    private fun loadDomainFrequency(prefs: SharedPreferences): MutableMap<String, Long> {
+        val freqRaw = prefs.getString(DigitalDefenderVpnService.KEY_DOMAIN_FREQUENCY, "")
+        if (freqRaw.isNullOrBlank()) return mutableMapOf()
+
+        return try {
+            val obj = JSONObject(freqRaw)
+            val result = mutableMapOf<String, Long>()
+            obj.keys().forEach { key ->
+                val value = obj.optLong(key, 0L)
+                if (key.isNotBlank()) {
+                    result[key] = value
+                }
+            }
+            result
+        } catch (e: Exception) {
+            Log.w(DigitalDefenderVpnService.TAG, "Failed to parse domain frequency", e)
+            mutableMapOf()
+        }
+    }
+
+    private fun serializeDomainFrequency(map: Map<String, Long>): String {
+        val obj = JSONObject()
+        map.forEach { (domain, count) ->
+            obj.put(domain, count)
+        }
+        return obj.toString()
+    }
+
     private fun serializeRecent(entries: List<BlockedEntry>): String {
         val array = JSONArray()
         entries.forEach { entry ->
             val obj = JSONObject()
             obj.put("domain", entry.domain)
             obj.put("timestamp", entry.timestamp)
+            if (!entry.category.isNullOrBlank()) {
+                obj.put("category", entry.category)
+            }
             array.put(obj)
         }
         return array.toString()

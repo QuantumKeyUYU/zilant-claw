@@ -15,14 +15,16 @@ enum class Category {
     ADS,
     TRACKERS,
     MALWARE,
+    CLEAN,
+    FOCUS,
     UNKNOWN
 }
 
-data class Evaluation(val isBlocked: Boolean)
+data class Evaluation(val isBlocked: Boolean, val category: Category = Category.UNKNOWN)
 
 data class BlocklistData(
-    val blockedExact: Set<String> = emptySet(),
-    val blockedWildcard: Set<String> = emptySet(),
+    val blockedExact: Map<String, Category> = emptyMap(),
+    val blockedWildcard: Map<String, Category> = emptyMap(),
     val allowExact: Set<String> = emptySet(),
     val allowWildcard: Set<String> = emptySet(),
     val mode: ProtectionMode = ProtectionMode.STANDARD,
@@ -35,6 +37,8 @@ object DomainBlocklist {
     const val MODE_ULTRA = "ultra"
 
     private const val KEY_PROTECTION_MODE = "protection_mode"
+    private const val KEY_CLEAN_MODE = "clean_mode"
+    private const val KEY_FOCUS_MODE = "focus_mode"
 
     private var current: BlocklistData = BlocklistData()
 
@@ -52,11 +56,14 @@ object DomainBlocklist {
         val normalized = domain.lowercase()
 
         if (matches(normalized, data.allowExact, data.allowWildcard)) {
-            return Evaluation(false)
+            return Evaluation(false, Category.UNKNOWN)
         }
 
-        val blocked = matches(normalized, data.blockedExact, data.blockedWildcard)
-        return Evaluation(blocked)
+        val category = matchCategory(normalized, data.blockedExact, data.blockedWildcard)
+        if (category != null) {
+            return Evaluation(true, category)
+        }
+        return Evaluation(false, Category.UNKNOWN)
     }
 
     fun buildBlocklistDataFromStream(
@@ -64,8 +71,8 @@ object DomainBlocklist {
         mode: String,
         category: Category
     ): BlocklistData {
-        val blockedExact = mutableSetOf<String>()
-        val blockedWildcard = mutableSetOf<String>()
+        val blockedExact = mutableMapOf<String, Category>()
+        val blockedWildcard = mutableMapOf<String, Category>()
         val allowExact = mutableSetOf<String>()
         val allowWildcard = mutableSetOf<String>()
 
@@ -80,12 +87,12 @@ object DomainBlocklist {
                 if (content.startsWith("*\\.")) {
                     val domain = content.removePrefix("*.").lowercase()
                     if (domain.isNotBlank()) {
-                        if (isAllow) allowWildcard.add(domain) else blockedWildcard.add(domain)
+                        if (isAllow) allowWildcard.add(domain) else blockedWildcard[domain] = category
                     }
                 } else {
                     val domain = content.lowercase()
                     if (domain.isNotBlank()) {
-                        if (isAllow) allowExact.add(domain) else blockedExact.add(domain)
+                        if (isAllow) allowExact.add(domain) else blockedExact[domain] = category
                     }
                 }
             }
@@ -103,16 +110,16 @@ object DomainBlocklist {
 
     fun combineBlocklists(blocklists: List<BlocklistData>, targetMode: String): BlocklistData {
         val target = modeToEnum(targetMode)
-        val blockedExact = mutableSetOf<String>()
-        val blockedWildcard = mutableSetOf<String>()
+        val blockedExact = mutableMapOf<String, Category>()
+        val blockedWildcard = mutableMapOf<String, Category>()
         val allowExact = mutableSetOf<String>()
         val allowWildcard = mutableSetOf<String>()
 
         blocklists.forEach { data ->
             if (target == ProtectionMode.STANDARD && data.mode != ProtectionMode.STANDARD) return@forEach
 
-            blockedExact += data.blockedExact
-            blockedWildcard += data.blockedWildcard
+            blockedExact.putAll(data.blockedExact)
+            blockedWildcard.putAll(data.blockedWildcard)
             allowExact += data.allowExact
             allowWildcard += data.allowWildcard
         }
@@ -162,6 +169,25 @@ object DomainBlocklist {
 
     private fun getProtectionModeEnum(context: Context): ProtectionMode = modeToEnum(getProtectionMode(context))
 
+    fun setDetoxModes(context: Context, clean: Boolean, focus: Boolean): Pair<Boolean, Boolean> {
+        val prefs = preferences(context)
+        val focusApplied = focus
+        val cleanApplied = if (focusApplied) true else clean
+        prefs.edit()
+            .putBoolean(KEY_CLEAN_MODE, cleanApplied)
+            .putBoolean(KEY_FOCUS_MODE, focusApplied)
+            .apply()
+        reloadForMode(context)
+        return Pair(cleanApplied, focusApplied)
+    }
+
+    fun getDetoxModes(context: Context): Pair<Boolean, Boolean> {
+        val prefs = preferences(context)
+        val clean = prefs.getBoolean(KEY_CLEAN_MODE, false)
+        val focus = prefs.getBoolean(KEY_FOCUS_MODE, false)
+        return Pair(clean || focus, focus)
+    }
+
     private fun modeToEnum(raw: String): ProtectionMode = when (raw.lowercase()) {
         MODE_STRICT -> ProtectionMode.STRICT
         MODE_ULTRA -> ProtectionMode.ULTRA
@@ -173,20 +199,35 @@ object DomainBlocklist {
         return wildcard.any { domain == it || domain.endsWith(".$it") }
     }
 
+    private fun matchCategory(
+        domain: String,
+        exact: Map<String, Category>,
+        wildcard: Map<String, Category>
+    ): Category? {
+        if (exact.containsKey(domain)) return exact[domain]
+        wildcard.forEach { (pattern, category) ->
+            if (domain == pattern || domain.endsWith(".$pattern")) {
+                return category
+            }
+        }
+        return null
+    }
+
     private fun loadBlocklistForMode(context: Context, mode: ProtectionMode): BlocklistData {
         val standard = loadFile(context, "blocklist_standard.txt", ProtectionMode.STANDARD, Category.ADS)
+        val cleanFocusLists = loadDetoxLists(context)
+        val baseLists = mutableListOf(standard)
+        baseLists.addAll(cleanFocusLists)
         return when (mode) {
-            ProtectionMode.STANDARD -> standard
+            ProtectionMode.STANDARD -> combineBlocklists(baseLists, MODE_STANDARD)
             ProtectionMode.STRICT -> combineBlocklists(
-                listOf(
-                    standard,
+                baseLists + listOf(
                     loadFile(context, "blocklist_strict.txt", ProtectionMode.STRICT, Category.TRACKERS)
                 ),
                 MODE_STRICT
             )
             ProtectionMode.ULTRA -> combineBlocklists(
-                listOf(
-                    standard,
+                baseLists + listOf(
                     loadFile(context, "blocklist_strict.txt", ProtectionMode.STRICT, Category.TRACKERS),
                     loadFile(
                         context,
@@ -198,6 +239,18 @@ object DomainBlocklist {
                 MODE_ULTRA
             )
         }
+    }
+
+    private fun loadDetoxLists(context: Context): List<BlocklistData> {
+        val (cleanEnabled, focusEnabled) = getDetoxModes(context)
+        val lists = mutableListOf<BlocklistData>()
+        if (cleanEnabled) {
+            lists.add(loadFile(context, "blocklists/blocklist_clean.txt", ProtectionMode.STANDARD, Category.CLEAN))
+        }
+        if (focusEnabled) {
+            lists.add(loadFile(context, "blocklists/blocklist_focus.txt", ProtectionMode.STANDARD, Category.FOCUS))
+        }
+        return lists
     }
 
     private fun loadFile(

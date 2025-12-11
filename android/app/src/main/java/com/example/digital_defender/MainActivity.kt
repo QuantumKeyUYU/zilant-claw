@@ -35,6 +35,7 @@ class MainActivity : FlutterActivity() {
                     "android_get_blocked_count" -> getBlockedCount(result)
                     "setProtectionMode" -> setProtectionMode(call, result)
                     "getProtectionMode" -> getProtectionMode(result)
+                    "setDetoxModes" -> setDetoxModes(call, result)
                     "openVpnSettings" -> openVpnSettings(result)
                     else -> result.notImplemented()
                 }
@@ -116,6 +117,19 @@ class MainActivity : FlutterActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get protection mode", e)
             result.error("get_mode_failed", "Failed to get protection mode", null)
+        }
+    }
+
+    private fun setDetoxModes(call: MethodCall, result: MethodChannel.Result) {
+        val clean = call.argument<Boolean>("clean") ?: false
+        val focus = call.argument<Boolean>("focus") ?: false
+        return try {
+            val applied = DomainBlocklist.setDetoxModes(this, clean, focus)
+            ProtectionController.applyProtectionMode()
+            result.success(mapOf("clean" to applied.first, "focus" to applied.second))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set detox modes", e)
+            result.error("set_detox_failed", "Failed to update detox modes", null)
         }
     }
 

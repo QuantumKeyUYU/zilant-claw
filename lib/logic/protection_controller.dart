@@ -30,7 +30,7 @@ class ProtectionController extends ChangeNotifier {
 
   ProtectionState _state = ProtectionState.off;
   bool _protectionEnabled = false;
-  bool _nsfwEnabled = false;
+  bool _cleanEnabled = false;
   bool _focusEnabled = false;
   String? _errorMessage;
   String? _errorCode;
@@ -43,7 +43,7 @@ class ProtectionController extends ChangeNotifier {
 
   ProtectionState get state => _state;
   bool get protectionEnabled => _protectionEnabled;
-  bool get nsfwEnabled => _nsfwEnabled;
+  bool get cleanEnabled => _cleanEnabled;
   bool get focusEnabled => _focusEnabled;
   String? get errorMessage => _errorMessage;
   String? get errorCode => _errorCode;
@@ -67,21 +67,37 @@ class ProtectionController extends ChangeNotifier {
     }
   }
 
-  Future<void> setNsfwEnabled(bool enabled) async {
+  Future<void> setCleanEnabled(bool enabled) async {
     if (!_protectionEnabled && enabled) {
       return;
     }
-    _nsfwEnabled = enabled;
-    notifyListeners();
+    await _applyDetoxModes(clean: enabled, focus: _focusEnabled && (enabled || _focusEnabled));
   }
 
   Future<void> setFocusEnabled(bool enabled) async {
     if (!_protectionEnabled && enabled) {
       return;
     }
-    _focusEnabled = enabled;
-    if (enabled && !_nsfwEnabled) {
-      _nsfwEnabled = true;
+    await _applyDetoxModes(clean: _cleanEnabled || enabled, focus: enabled);
+  }
+
+  Future<void> _applyDetoxModes({required bool clean, required bool focus}) async {
+    if (!_isAndroid) {
+      _cleanEnabled = clean || focus;
+      _focusEnabled = focus;
+      notifyListeners();
+      return;
+    }
+    try {
+      final result = await _channel.invokeMethod<Map<dynamic, dynamic>>(
+        'setDetoxModes',
+        {'clean': clean, 'focus': focus},
+      );
+      _cleanEnabled = (result?['clean'] as bool?) ?? clean || focus;
+      _focusEnabled = (result?['focus'] as bool?) ?? focus;
+      _statsError = null;
+    } on PlatformException catch (e) {
+      _statsError = e.message ?? 'Не удалось обновить режимы детокса.';
     }
     notifyListeners();
   }
@@ -202,6 +218,8 @@ class ProtectionController extends ChangeNotifier {
         if (decoded['mode'] is String) {
           _mode = _stringToMode(decoded['mode'] as String);
         }
+        _cleanEnabled = _stats.cleanEnabled;
+        _focusEnabled = _stats.focusEnabled;
       }
     } catch (e) {
       debugPrint('ProtectionController.refreshStats error: $e');
@@ -233,18 +251,22 @@ class ProtectionController extends ChangeNotifier {
 
   Future<void> clearRecentBlocks() async {
     if (!_isAndroid) {
-      _stats = ProtectionStats(
-        blockedCount: _stats.blockedCount,
-        totalRequests: _stats.totalRequests,
-        sessionBlocked: _stats.sessionBlocked,
-        blockedNsfw: _stats.blockedNsfw,
-        blockedFocus: _stats.blockedFocus,
-        domainBlockFrequency: _stats.domainBlockFrequency,
-        recent: const [],
-        isRunning: _stats.isRunning,
-        mode: _stats.mode,
-        failOpenActive: _stats.failOpenActive,
-      );
+        _stats = ProtectionStats(
+          blockedCount: _stats.blockedCount,
+          totalRequests: _stats.totalRequests,
+          sessionBlocked: _stats.sessionBlocked,
+          blockedClean: _stats.blockedClean,
+          blockedFocus: _stats.blockedFocus,
+          attentionAttempts: _stats.attentionAttempts,
+          trackingAttempts: _stats.trackingAttempts,
+          domainBlockFrequency: _stats.domainBlockFrequency,
+          recent: const [],
+          isRunning: _stats.isRunning,
+          mode: _stats.mode,
+          failOpenActive: _stats.failOpenActive,
+          cleanEnabled: _stats.cleanEnabled,
+          focusEnabled: _stats.focusEnabled,
+        );
       notifyListeners();
       return;
     }
@@ -409,28 +431,36 @@ class ProtectionStats {
     required this.totalRequests,
     required this.sessionBlocked,
     required this.recent,
-    required this.blockedNsfw,
+    required this.blockedClean,
     required this.blockedFocus,
+    required this.attentionAttempts,
+    required this.trackingAttempts,
     required this.domainBlockFrequency,
     required this.isRunning,
     required this.mode,
     required this.failOpenActive,
+    required this.cleanEnabled,
+    required this.focusEnabled,
   });
 
   final int blockedCount;
   final int totalRequests;
   final int sessionBlocked;
-  final int blockedNsfw;
+  final int blockedClean;
   final int blockedFocus;
+  final int attentionAttempts;
+  final int trackingAttempts;
   final Map<String, int> domainBlockFrequency;
   final List<BlockedEntry> recent;
   final bool isRunning;
   final ProtectionMode mode;
   final bool failOpenActive;
+  final bool cleanEnabled;
+  final bool focusEnabled;
 
   int get totalRequestsToday => totalRequests;
   int get blockedTotalToday => blockedCount;
-  int get blockedNsfwToday => blockedNsfw;
+  int get blockedNsfwToday => blockedClean;
   int get blockedFocusToday => blockedFocus;
   String get topStalkerDomainToday {
     if (domainBlockFrequency.isEmpty) return '—';
@@ -468,13 +498,17 @@ class ProtectionStats {
         blockedCount: 0,
         totalRequests: 0,
         sessionBlocked: 0,
-        blockedNsfw: 0,
+        blockedClean: 0,
         blockedFocus: 0,
+        attentionAttempts: 0,
+        trackingAttempts: 0,
         domainBlockFrequency: {},
         recent: [],
         isRunning: false,
         mode: ProtectionMode.standard,
         failOpenActive: false,
+        cleanEnabled: false,
+        focusEnabled: false,
       );
 
   factory ProtectionStats.fromJson(Map<String, dynamic> json) {
@@ -530,11 +564,17 @@ class ProtectionStats {
           }()
         : ProtectionMode.standard;
 
-    final blockedNsfwRaw = json['blockedNsfw'];
-    final blockedNsfw = blockedNsfwRaw is num ? blockedNsfwRaw.toInt() : 0;
+    final blockedCleanRaw = json['blockedClean'] ?? json['blockedNsfw'];
+    final blockedClean = blockedCleanRaw is num ? blockedCleanRaw.toInt() : 0;
 
     final blockedFocusRaw = json['blockedFocus'];
     final blockedFocus = blockedFocusRaw is num ? blockedFocusRaw.toInt() : 0;
+
+    final attentionAttemptsRaw = json['attentionAttempts'];
+    final attentionAttempts = attentionAttemptsRaw is num ? attentionAttemptsRaw.toInt() : 0;
+
+    final trackingAttemptsRaw = json['trackingAttempts'];
+    final trackingAttempts = trackingAttemptsRaw is num ? trackingAttemptsRaw.toInt() : 0;
 
     final freqRaw = json['domainBlockFrequency'];
     final domainBlockFrequency = <String, int>{};
@@ -546,17 +586,24 @@ class ProtectionStats {
       });
     }
 
+    final cleanEnabled = json['cleanEnabled'] == true;
+    final focusEnabled = json['focusEnabled'] == true;
+
     return ProtectionStats(
       blockedCount: blockedCount,
       totalRequests: totalRequests,
       sessionBlocked: sessionBlocked,
-      blockedNsfw: blockedNsfw,
+      blockedClean: blockedClean,
       blockedFocus: blockedFocus,
+      attentionAttempts: attentionAttempts,
+      trackingAttempts: trackingAttempts,
       domainBlockFrequency: domainBlockFrequency,
       recent: recentEntries,
       isRunning: isRunning,
       mode: parsedMode,
       failOpenActive: failOpenActive,
+      cleanEnabled: cleanEnabled,
+      focusEnabled: focusEnabled,
     );
   }
 }

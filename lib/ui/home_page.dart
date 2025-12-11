@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 
@@ -87,8 +88,8 @@ class _HomePageState extends State<HomePage> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.shield_outlined),
-            tooltip: AppStrings.common.openPrivacyGuide,
+            icon: const Icon(Icons.info_outline),
+            tooltip: AppStrings.common.protectionInfoLink,
             onPressed: () => _openProtectionInfo(context),
           )
         ],
@@ -98,13 +99,15 @@ class _HomePageState extends State<HomePage> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            _buildProtectionCard(context, isOn, isBusy, state, failOpenActive),
+            _buildHeroCard(context, isOn, isBusy, state, failOpenActive),
+            const SizedBox(height: 16),
+            _buildAttentionPanel(context, stats),
             const SizedBox(height: 16),
             _buildDetoxModes(context, isOn),
-            const SizedBox(height: 16),
-            _buildTodayStats(context, stats),
             const SizedBox(height: 12),
             _buildStatsActions(context),
+            const SizedBox(height: 12),
+            _buildStoryTile(context, stats),
             if (widget.controller.statsError != null) ...[
               const SizedBox(height: 12),
               Text(
@@ -118,82 +121,48 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildProtectionCard(
+  Widget _buildHeroCard(
     BuildContext context,
     bool isOn,
     bool isBusy,
     ProtectionState state,
-    bool failOpenActive,
+    bool failOpen,
   ) {
-    final errorMessage = widget.controller.errorMessage;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     final needsPermission = widget.controller.errorCode == 'denied';
-
-    final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
-    final colorScheme = theme.colorScheme;
+    final errorMessage = widget.controller.errorMessage;
 
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surfaceVariant
-            .withOpacity(colorScheme.brightness == Brightness.dark ? 0.6 : 1),
+        color: colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.22),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(
-            child: Column(
-              children: [
-                Text(
-                  AppStrings.common.title,
-                  style: textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  AppStrings.common.poweredBy,
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant.withOpacity(0.8),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _StatusIndicator(
-                      active: isOn,
-                      textColor: colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(height: 12),
                     Text(
-                      isOn
-                          ? AppStrings.home.protectionOnTitle
-                          : AppStrings.home.protectionOffTitle,
-                      style: textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: colorScheme.onSurfaceVariant,
+                      isOn ? AppStrings.home.protectionOnTitle : AppStrings.home.protectionOffTitle,
+                      style: textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: colorScheme.onPrimaryContainer,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
                       _subtitleForState(
                         state,
@@ -201,8 +170,8 @@ class _HomePageState extends State<HomePage> {
                         isOn,
                       ),
                       style: textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant.withOpacity(0.85),
-                        fontWeight: FontWeight.w500,
+                        color: colorScheme.onPrimaryContainer.withOpacity(0.9),
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -214,33 +183,37 @@ class _HomePageState extends State<HomePage> {
                   Switch.adaptive(
                     value: isOn || state == ProtectionState.starting,
                     onChanged: isBusy ? null : (_) => _toggleProtection(),
-                    activeColor: colorScheme.primary,
+                    activeColor: colorScheme.onPrimaryContainer,
                   ),
                   if (isBusy)
                     const Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
+                      padding: EdgeInsets.only(top: 6),
+                      child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
                     ),
                 ],
               ),
             ],
           ),
-          if (failOpenActive) ...[
-            const SizedBox(height: 14),
+          const SizedBox(height: 12),
+          Text(
+            isOn ? AppStrings.home.protectionOn : AppStrings.home.protectionOff,
+            style: textTheme.bodyLarge?.copyWith(
+              color: colorScheme.onPrimaryContainer,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (failOpen) ...[
+            const SizedBox(height: 10),
             Text(
               AppStrings.home.protectionFailOpenWarning,
               style: textTheme.bodySmall?.copyWith(
-                color: Colors.amber.shade800,
-                fontWeight: FontWeight.w600,
+                color: Colors.amber.shade900,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
           if (state == ProtectionState.error && errorMessage != null) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             Text(
               errorMessage,
               style: const TextStyle(color: Colors.redAccent),
@@ -257,8 +230,69 @@ class _HomePageState extends State<HomePage> {
                       onPressed: _toggleProtection,
                       child: Text(AppStrings.actions.retryStart),
                     ),
-            )
+            ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttentionPanel(BuildContext context, ProtectionStats stats) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final total = stats.totalRequestsToday;
+    final tracking = stats.trackingAttempts;
+    final attention = stats.attentionAttempts;
+    final topStalker = stats.topStalkerDomainToday;
+    final noise = _noiseLabel(tracking + attention);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant.withOpacity(colorScheme.brightness == Brightness.dark ? 0.55 : 1),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colorScheme.outline.withOpacity(0.15)),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            AppStrings.home.todayHeader,
+            style: textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _MetricRow(
+            label: AppStrings.home.todayTotalRequests.replaceFirst('%d', total.toString()),
+            textTheme: textTheme,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: 8),
+          _MetricRow(
+            label: AppStrings.home.todayTrackingAttempts.replaceFirst('%d', tracking.toString()),
+            textTheme: textTheme,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: 8),
+          _MetricRow(
+            label: AppStrings.home.todayAttentionAttempts.replaceFirst('%d', attention.toString()),
+            textTheme: textTheme,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: 8),
+          _MetricRow(
+            label: AppStrings.home.todayTopStalker.replaceFirst('%s', topStalker),
+            textTheme: textTheme,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: 8),
+          _MetricRow(
+            label: AppStrings.home.todayNoiseLevel.replaceFirst('%s', noise),
+            textTheme: textTheme,
+            color: colorScheme.onSurfaceVariant,
+          ),
         ],
       ),
     );
@@ -267,13 +301,12 @@ class _HomePageState extends State<HomePage> {
   Widget _buildDetoxModes(BuildContext context, bool protectionOn) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final nsfwEnabled = widget.controller.nsfwEnabled;
+    final cleanEnabled = widget.controller.cleanEnabled;
     final focusEnabled = widget.controller.focusEnabled;
 
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surfaceVariant
-            .withOpacity(colorScheme.brightness == Brightness.dark ? 0.55 : 1),
+        color: colorScheme.surfaceVariant.withOpacity(colorScheme.brightness == Brightness.dark ? 0.5 : 1),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: colorScheme.outline.withOpacity(0.2)),
       ),
@@ -284,20 +317,20 @@ class _HomePageState extends State<HomePage> {
           Text(
             AppStrings.home.detoxHeader,
             style: textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
               color: colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 12),
           _DetoxTile(
-            title: AppStrings.home.nsfwTitle,
-            subtitle: AppStrings.home.nsfwSubtitle,
-            hint: AppStrings.home.nsfwHint,
-            value: nsfwEnabled,
+            title: AppStrings.home.cleanTitle,
+            subtitle: AppStrings.home.cleanSubtitle,
+            hint: AppStrings.home.cleanHint,
+            value: cleanEnabled,
             enabled: protectionOn,
-            onChanged: (value) => widget.controller.setNsfwEnabled(value),
+            onChanged: (value) => widget.controller.setCleanEnabled(value),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           _DetoxTile(
             title: AppStrings.home.focusTitle,
             subtitle: AppStrings.home.focusSubtitle,
@@ -305,51 +338,6 @@ class _HomePageState extends State<HomePage> {
             value: focusEnabled,
             enabled: protectionOn,
             onChanged: (value) => widget.controller.setFocusEnabled(value),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTodayStats(BuildContext context, ProtectionStats stats) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final total = stats.totalRequestsToday;
-    final blocked = stats.blockedTotalToday;
-    final topStalker = stats.topStalkerDomainToday;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceVariant
-            .withOpacity(colorScheme.brightness == Brightness.dark ? 0.55 : 1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outline.withOpacity(0.25)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            AppStrings.home.todayHeader,
-            style: textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            AppStrings.home.todayTotalRequests.replaceFirst('%d', total.toString()),
-            style: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            AppStrings.home.todayBlocked.replaceFirst('%d', blocked.toString()),
-            style: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            AppStrings.home.todayTopStalker.replaceFirst('%s', topStalker),
-            style: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurfaceVariant),
           ),
         ],
       ),
@@ -389,6 +377,49 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildStoryTile(BuildContext context, ProtectionStats stats) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final story = _pickStory(stats);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colorScheme.outline.withOpacity(0.2)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Icon(Icons.auto_awesome, color: colorScheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  AppStrings.home.storiesTitle,
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  story,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurface.withOpacity(0.85),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _subtitleForState(
     ProtectionState state,
     String? errorMessage,
@@ -409,31 +440,45 @@ class _HomePageState extends State<HomePage> {
             : AppStrings.home.protectionSubtitleOff;
     }
   }
+
+  String _noiseLabel(int intensity) {
+    if (intensity > 80) return AppStrings.home.noiseHigh;
+    if (intensity > 30) return AppStrings.home.noiseElevated;
+    return AppStrings.home.noiseCalm;
+  }
+
+  String _pickStory(ProtectionStats stats) {
+    final rand = Random(DateTime.now().millisecondsSinceEpoch);
+    if (stats.blockedFocus > 0) {
+      final template = AppStrings.home.storyFocusBursts[rand.nextInt(AppStrings.home.storyFocusBursts.length)];
+      if (template.contains('%d')) {
+        return template.replaceFirst('%d', stats.blockedFocus.toString());
+      }
+      return template;
+    }
+    if (stats.trackingAttempts > 0 || stats.blockedClean > 0) {
+      final template = AppStrings.home.storyTracking[rand.nextInt(AppStrings.home.storyTracking.length)];
+      return template;
+    }
+    return AppStrings.home.storyQuiet;
+  }
 }
 
-class _StatusIndicator extends StatelessWidget {
-  const _StatusIndicator({required this.active, this.textColor});
+class _MetricRow extends StatelessWidget {
+  const _MetricRow({required this.label, required this.textTheme, required this.color});
 
-  final bool active;
-  final Color? textColor;
+  final String label;
+  final TextTheme textTheme;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final labelColor = textColor ?? colorScheme.onSurfaceVariant;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.circle, size: 10, color: active ? Colors.greenAccent : Colors.grey),
-        const SizedBox(width: 6),
-        Text(
-          active ? AppStrings.home.statusOn : AppStrings.home.statusOff,
-          style: Theme.of(context)
-              .textTheme
-              .labelMedium
-              ?.copyWith(color: labelColor, fontWeight: FontWeight.w600),
-        ),
-      ],
+    return Text(
+      label,
+      style: textTheme.bodyLarge?.copyWith(
+        color: color,
+        fontWeight: FontWeight.w700,
+      ),
     );
   }
 }
@@ -469,7 +514,7 @@ class _DetoxTile extends StatelessWidget {
               Text(
                 title,
                 style: textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                   color: colorScheme.onSurfaceVariant,
                 ),
               ),
@@ -478,7 +523,7 @@ class _DetoxTile extends StatelessWidget {
                 subtitle,
                 style: textTheme.bodyMedium?.copyWith(
                   color: colorScheme.onSurfaceVariant.withOpacity(0.85),
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 6),
@@ -486,7 +531,7 @@ class _DetoxTile extends StatelessWidget {
                 hint,
                 style: textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant.withOpacity(0.65),
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],

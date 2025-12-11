@@ -1,0 +1,3 @@
+# Calm clean mode domains
+*\.adult-example.com
+sensitive-media.com
