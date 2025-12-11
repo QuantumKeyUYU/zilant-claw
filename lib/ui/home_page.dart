@@ -105,7 +105,7 @@ class _HomePageState extends State<HomePage> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.verified_user_outlined),
+            icon: const Icon(Icons.shield_outlined),
             tooltip: AppStrings.common.openPrivacyGuide,
             onPressed: () => _openProtectionInfo(context),
           )
@@ -148,35 +148,48 @@ class _HomePageState extends State<HomePage> {
     final errorMessage = widget.controller.errorMessage;
     final needsPermission = widget.controller.errorCode == 'denied';
 
+    final textTheme = Theme.of(context).textTheme;
+
     return Card(
-      color: Colors.blueGrey.shade900,
+      color: Colors.grey.shade100,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              AppStrings.common.title,
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineMedium
-                  ?.copyWith(color: Colors.white, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        AppStrings.common.title,
+                        style: textTheme.headlineMedium
+                            ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        AppStrings.common.poweredBy,
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: Colors.grey.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.shield_outlined, color: Colors.black87),
+              ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              AppStrings.common.poweredBy,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: Colors.white70, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 _StateIndicator(state: state),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -185,22 +198,16 @@ class _HomePageState extends State<HomePage> {
                         isOn
                             ? AppStrings.home.protectionEnabled
                             : AppStrings.home.protectionDisabled,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+                        style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Text(
                         _subtitleForState(
                           state,
                           needsPermission ? AppStrings.home.permissionRequired : errorMessage,
                           isOn,
                         ),
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(color: Colors.white70),
+                        style: textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700),
                       ),
                     ],
                   ),
@@ -211,20 +218,15 @@ class _HomePageState extends State<HomePage> {
                     Switch.adaptive(
                       value: isOn || state == ProtectionState.starting,
                       onChanged: isBusy ? null : (_) => _toggleProtection(),
-                      activeColor: Colors.greenAccent,
+                      activeColor: Colors.green,
                     ),
                     if (isBusy)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6),
                         child: SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation(
-                              isOn ? Colors.greenAccent : Colors.white,
-                            ),
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                       ),
                   ],
@@ -232,13 +234,13 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
             if (failOpenActive) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Text(
                 AppStrings.home.protectionFailOpenWarning,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: Colors.amber.shade200, fontWeight: FontWeight.w600),
+                style: textTheme.bodySmall?.copyWith(
+                  color: Colors.amber.shade800,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
             if (state == ProtectionState.error && errorMessage != null) ...[
@@ -331,8 +333,7 @@ class _HomePageState extends State<HomePage> {
                   .bodySmall
                   ?.copyWith(color: Colors.grey.shade700, fontWeight: FontWeight.w500),
             ),
-            if (currentMode == ProtectionMode.advanced ||
-                currentMode == ProtectionMode.ultra) ...[
+            if (currentMode == ProtectionMode.ultra) ...[
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
@@ -348,9 +349,7 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        currentMode == ProtectionMode.ultra
-                            ? AppStrings.modes.ultraModeWarning
-                            : AppStrings.modes.strictModeWarning,
+                        AppStrings.modes.ultraModeWarning,
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
@@ -370,17 +369,8 @@ class _HomePageState extends State<HomePage> {
   Widget _buildStatsSummary(BuildContext context, ProtectionStats stats) {
     final total = stats.totalRequests;
     final blocked = stats.sessionBlocked;
-    String summary;
-    if (total <= 0) {
-      summary = AppStrings.home.todayTrafficSilent;
-    } else {
-      final percent = total == 0 ? 0 : (blocked / total) * 100;
-      final percentText = percent >= 10 ? percent.toStringAsFixed(0) : percent.toStringAsFixed(1);
-      summary = AppStrings.home.todayTrafficSummary
-          .replaceFirst('%s', total.toString())
-          .replaceFirst('%s', blocked.toString())
-          .replaceFirst('%s', percentText);
-    }
+    final hasTraffic = total > 0;
+    final percent = (hasTraffic && blocked > 0) ? (blocked / total) * 100 : null;
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -403,10 +393,36 @@ class _HomePageState extends State<HomePage> {
                         ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    summary,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade800),
-                  ),
+                  if (!hasTraffic)
+                    Text(
+                      AppStrings.home.todayTrafficSilent,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: Colors.grey.shade800),
+                    )
+                  else ...[
+                    Text(
+                      AppStrings.home.todayRequests.replaceFirst('%s', total.toString()),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: Colors.grey.shade800),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      percent != null
+                          ? AppStrings.home.todayBlockedWithPercent
+                              .replaceFirst('%s', blocked.toString())
+                              .replaceFirst('%s',
+                                  percent >= 10 ? percent.toStringAsFixed(0) : percent.toStringAsFixed(1))
+                          : AppStrings.home.todayBlocked.replaceFirst('%s', blocked.toString()),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: Colors.grey.shade800),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -426,17 +442,23 @@ class _HomePageState extends State<HomePage> {
     return Row(
       children: [
         Expanded(
-          child: ElevatedButton(
-            onPressed: () => _goToStats(context),
-            child: Text(AppStrings.stats.details),
+          child: SizedBox(
+            height: 48,
+            child: ElevatedButton(
+              onPressed: () => _goToStats(context),
+              child: Text(AppStrings.stats.details),
+            ),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: OutlinedButton.icon(
-            onPressed: _resetStats,
-            icon: const Icon(Icons.delete_outline),
-            label: Text(AppStrings.stats.resetStats),
+          child: SizedBox(
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: _resetStats,
+              icon: const Icon(Icons.delete_outline),
+              label: Text(AppStrings.stats.resetStats),
+            ),
           ),
         ),
       ],
@@ -480,7 +502,9 @@ class _HomePageState extends State<HomePage> {
       case ProtectionState.on:
       case ProtectionState.off:
       default:
-        return isOn ? AppStrings.home.vpnActive : AppStrings.home.vpnInactive;
+        return isOn
+            ? AppStrings.home.protectionSubtitleOn
+            : AppStrings.home.protectionSubtitleOff;
     }
   }
 }
@@ -533,7 +557,7 @@ class _StateIndicator extends StatelessWidget {
           style: Theme.of(context)
               .textTheme
               .labelMedium
-              ?.copyWith(color: Colors.white70, fontWeight: FontWeight.w600),
+              ?.copyWith(color: Colors.grey.shade800, fontWeight: FontWeight.w600),
         ),
       ],
     );

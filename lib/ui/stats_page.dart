@@ -110,10 +110,8 @@ class _StatsPageState extends State<StatsPage> {
     // Используем геттеры, которые мы добавили в контроллер на предыдущем шаге
     final stats = widget.controller.stats;
     final failOpen = stats.failOpenActive;
-    final vpnActive = stats.vpnActive;
-    final mode = stats.modeName;
-    final isStrict =
-        stats.mode == ProtectionMode.advanced || stats.mode == ProtectionMode.ultra;
+    final isActive = stats.vpnActive;
+    final modeLabel = _modeLabel(stats.mode);
     final modeSummary = () {
       switch (stats.mode) {
         case ProtectionMode.ultra:
@@ -125,6 +123,7 @@ class _StatsPageState extends State<StatsPage> {
           return AppStrings.modes.standardSummary;
       }
     }();
+    final showUltraWarning = isActive && stats.mode == ProtectionMode.ultra;
 
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -143,7 +142,7 @@ class _StatsPageState extends State<StatsPage> {
                   borderRadius: BorderRadius.circular(16)),
               // surfaceVariant может быть устаревшим в новых версиях Flutter,
               // используем secondaryContainer как безопасную альтернативу, если surfaceVariant недоступен
-              color: colorScheme.secondaryContainer, 
+              color: colorScheme.secondaryContainer,
               child: Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -153,50 +152,59 @@ class _StatsPageState extends State<StatsPage> {
                     Row(
                       children: [
                         Icon(
-                          vpnActive
+                          isActive
                               ? Icons.shield_rounded
                               : Icons.shield_outlined,
-                          color: vpnActive
+                          color: isActive
                               ? Colors.green
                               : colorScheme.onSurfaceVariant,
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          vpnActive
-                              ? AppStrings.stats.vpnActive
-                              : AppStrings.stats.vpnInactive,
-                          style: textTheme.titleMedium,
+                          isActive
+                              ? AppStrings.stats.protectionActive
+                              : AppStrings.stats.protectionInactive,
+                          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                         ),
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text('${AppStrings.stats.protectionMode}: $mode', style: textTheme.bodyMedium),
-                    const SizedBox(height: 2),
-                    Text(
-                      modeSummary,
-                      style: textTheme.bodySmall?.copyWith(color: colorScheme.onSecondaryContainer),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      failOpen
-                          ? AppStrings.stats.filterTemporarilyDisabled
-                          : AppStrings.stats.filterActive,
-                      style: TextStyle(
-                        color:
-                            failOpen ? Colors.orangeAccent : Colors.greenAccent,
-                        fontSize: 13,
+                    if (isActive) ...[
+                      Text(
+                        AppStrings.modes.modeStatus.replaceFirst('%s', modeLabel),
+                        style: textTheme.bodyMedium,
                       ),
-                    ),
+                      const SizedBox(height: 2),
+                      Text(
+                        modeSummary,
+                        style: textTheme.bodySmall?.copyWith(color: colorScheme.onSecondaryContainer),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        failOpen
+                            ? AppStrings.stats.filterTemporarilyDisabled
+                            : AppStrings.stats.filterActive,
+                        style: TextStyle(
+                          color: failOpen ? Colors.orangeAccent : Colors.green,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ] else ...[
+                      Text(
+                        AppStrings.stats.filterInactiveDescription,
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
-            if (isStrict) ...[
+            if (showUltraWarning) ...[
               const SizedBox(height: 12),
               _StrictModeBanner(
-                message: stats.mode == ProtectionMode.ultra
-                    ? AppStrings.modes.ultraModeWarning
-                    : AppStrings.modes.strictModeWarning,
+                message: AppStrings.modes.ultraModeWarning,
               ),
             ],
             const SizedBox(height: 12),
@@ -262,6 +270,17 @@ class _StatsPageState extends State<StatsPage> {
         ),
       ),
     );
+  }
+
+  String _modeLabel(ProtectionMode mode) {
+    switch (mode) {
+      case ProtectionMode.standard:
+        return AppStrings.modes.standard;
+      case ProtectionMode.advanced:
+        return AppStrings.modes.strict;
+      case ProtectionMode.ultra:
+        return AppStrings.modes.ultra;
+    }
   }
 }
 
