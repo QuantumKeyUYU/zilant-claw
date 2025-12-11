@@ -62,12 +62,16 @@ class HomeStrings {
   final String noiseHigh = 'Высокий';
   final String storiesTitle = 'Истории внимания';
   final String storyQuiet = 'Корректный день: интернет вёл себя тихо.';
-  final List<String> storyFocusBursts = [
+  
+  // ИСПРАВЛЕНИЕ ЗДЕСЬ: Добавлено const перед списками
+  final List<String> storyFocusBursts = const [
     'YouTube Shorts снова подмигнули вам — мы спрятали их.',
     'Сегодня TikTok пытался захватить ваше внимание %d раз.',
     'Ленты рекомендаций хотели увести вас в сторону — мы притушили шум.'
   ];
-  final List<String> storyTracking = [
+  
+  // ИСПРАВЛЕНИЕ ЗДЕСЬ: Добавлено const перед списками
+  final List<String> storyTracking = const [
     'Yandex запросил о вас чуть больше, чем вчера.',
     'Телеметрия OEM пыталась подсмотреть, но мы её придержали.',
     'Рекламные трекеры получили мягкий отбой.'
