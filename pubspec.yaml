@@ -19,4 +19,6 @@ flutter:
     - assets/blocklists/blocklist_light.txt
     - assets/blocklists/blocklist_standard.txt
     - assets/blocklists/blocklist_strict.txt
+    - assets/blocklists/blocklist_clean.txt
+    - assets/blocklists/blocklist_focus.txt
     - assets/blocklists/blocklist_test_obfusgated.txt

@@ -1,0 +1,3 @@
+# Focus capsule domains
+*\.shortvideo-example.com
+infinite-scroll.example

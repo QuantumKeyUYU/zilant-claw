@@ -73,22 +73,16 @@ class _StatsPageState extends State<StatsPage> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  if (protectionOn)
-                    Text(
-                      AppStrings.stats.protectionSubtitleOn,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: protectionOn
-                            ? colorScheme.onPrimaryContainer.withOpacity(0.9)
-                            : colorScheme.onSurfaceVariant,
-                      ),
-                    )
-                  else
-                    Text(
-                      AppStrings.stats.protectionSubtitleOff,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
+                  Text(
+                    protectionOn
+                        ? AppStrings.stats.protectionSubtitleOn
+                        : AppStrings.stats.protectionSubtitleOff,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: protectionOn
+                          ? colorScheme.onPrimaryContainer.withOpacity(0.9)
+                          : colorScheme.onSurfaceVariant,
                     ),
+                  ),
                   if (stats.failOpenActive) ...[
                     const SizedBox(height: 6),
                     Text(
@@ -120,27 +114,33 @@ class _StatsPageState extends State<StatsPage> {
                   ),
                   const SizedBox(height: 10),
                   _StatRow(
-                    label:
-                        AppStrings.stats.statsTotal.replaceFirst('%d', stats.totalRequestsToday.toString()),
-                    value: '',
+                    label: AppStrings.stats.statsTotal,
+                    value: stats.totalRequestsToday.toString(),
                   ),
                   const SizedBox(height: 6),
                   _StatRow(
-                    label: AppStrings.stats.statsBlockedTotal
-                        .replaceFirst('%d', stats.blockedTotalToday.toString()),
-                    value: '',
+                    label: AppStrings.stats.statsBlockedTotal,
+                    value: stats.blockedTotalToday.toString(),
                   ),
                   const SizedBox(height: 6),
                   _StatRow(
-                    label: AppStrings.stats.statsBlockedNsfw
-                        .replaceFirst('%d', stats.blockedNsfwToday.toString()),
-                    value: '',
+                    label: AppStrings.stats.statsBlockedClean,
+                    value: stats.blockedNsfwToday.toString(),
                   ),
                   const SizedBox(height: 6),
                   _StatRow(
-                    label: AppStrings.stats.statsBlockedFocus
-                        .replaceFirst('%d', stats.blockedFocusToday.toString()),
-                    value: '',
+                    label: AppStrings.stats.statsBlockedFocus,
+                    value: stats.blockedFocusToday.toString(),
+                  ),
+                  const SizedBox(height: 6),
+                  _StatRow(
+                    label: AppStrings.stats.statsAttention,
+                    value: stats.attentionAttempts.toString(),
+                  ),
+                  const SizedBox(height: 6),
+                  _StatRow(
+                    label: AppStrings.stats.statsTracking,
+                    value: stats.trackingAttempts.toString(),
                   ),
                 ],
               ),
@@ -205,15 +205,17 @@ class _StatsPageState extends State<StatsPage> {
 
   String _mapCategory(String? raw) {
     switch (raw?.toLowerCase()) {
-      case 'nsfw':
-        return 'NSFW';
+      case 'clean':
+        return AppStrings.stats.categoryClean;
       case 'time_waster':
       case 'focus':
-        return AppStrings.home.focusTitle;
+        return AppStrings.stats.categoryFocus;
       case 'ads':
-        return 'Ads';
+        return AppStrings.stats.categoryAds;
       case 'analytics':
-        return 'Analytics';
+      case 'telemetry':
+      case 'trackers':
+        return AppStrings.stats.categoryTelemetry;
       default:
         return '—';
     }
@@ -221,8 +223,8 @@ class _StatsPageState extends State<StatsPage> {
 
   List<String> _activeModes() {
     final modes = <String>[];
-    if (widget.controller.nsfwEnabled) {
-      modes.add(AppStrings.home.nsfwTitle);
+    if (widget.controller.cleanEnabled) {
+      modes.add(AppStrings.home.cleanTitle);
     }
     if (widget.controller.focusEnabled) {
       modes.add(AppStrings.home.focusTitle);
