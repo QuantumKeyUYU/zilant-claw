@@ -10,4 +10,27 @@
     <string name="protection_mode_standard">Стандарт</string>
     <string name="protection_mode_strict">Продвинутый</string>
     <string name="protection_mode_ultra">ULTRA</string>
+    <string name="stillnet_title">StillNet</string>
+    <string name="stillnet_tagline">security engine · Zilant Prime</string>
+    <string name="protection_on_title">Защита: активна</string>
+    <string name="protection_off_title">Защита: выключена</string>
+    <string name="protection_on_subtitle">Фильтруем запросы через защищённый DNS — меньше рекламы и трекинга.</string>
+    <string name="protection_off_subtitle">Трафик идёт напрямую — без фильтра.</string>
+    <string name="detox_header">Детокс-режимы</string>
+    <string name="nsfw_title">NSFW-фильтр</string>
+    <string name="nsfw_subtitle">Скрывать порно и откровенный adult-контент.</string>
+    <string name="nsfw_hint">Работает только когда защита включена.</string>
+    <string name="focus_title">Фокус-режим</string>
+    <string name="focus_subtitle">Режем TikTok, шортсы и другие пожиратели времени, мессенджеры остаются.</string>
+    <string name="focus_hint">При включении фокуса NSFW-фильтр включается автоматически.</string>
+    <string name="today_header">Сегодня</string>
+    <string name="today_total_requests">Всего запросов: %1$d</string>
+    <string name="today_blocked">Заблокировано: %1$d</string>
+    <string name="today_top_stalker">Топ-сталкер: %1$s</string>
+    <string name="stats_total">Всего запросов: %1$d</string>
+    <string name="stats_blocked_total">Заблокировано всего: %1$d</string>
+    <string name="stats_blocked_nsfw">Из них NSFW: %1$d</string>
+    <string name="stats_blocked_focus">Из них Фокус-режим: %1$d</string>
+    <string name="stats_recent_header">Последние заблокированные</string>
+    <string name="stats_recent_empty">Пока ничего не заблокировано — вы в чистом интернете 😌</string>
 </resources>

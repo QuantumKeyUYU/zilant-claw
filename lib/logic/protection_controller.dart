@@ -29,6 +29,9 @@ class ProtectionController extends ChangeNotifier {
   final Duration _commandTimeout;
 
   ProtectionState _state = ProtectionState.off;
+  bool _protectionEnabled = false;
+  bool _nsfwEnabled = false;
+  bool _focusEnabled = false;
   String? _errorMessage;
   String? _errorCode;
   ProtectionStats _stats = ProtectionStats.empty();
@@ -39,6 +42,9 @@ class ProtectionController extends ChangeNotifier {
   Timer? _commandTimeoutTimer;
 
   ProtectionState get state => _state;
+  bool get protectionEnabled => _protectionEnabled;
+  bool get nsfwEnabled => _nsfwEnabled;
+  bool get focusEnabled => _focusEnabled;
   String? get errorMessage => _errorMessage;
   String? get errorCode => _errorCode;
   ProtectionStats get stats => _stats;
@@ -59,6 +65,25 @@ class ProtectionController extends ChangeNotifier {
     } catch (_) {
       // keep existing mode
     }
+  }
+
+  Future<void> setNsfwEnabled(bool enabled) async {
+    if (!_protectionEnabled && enabled) {
+      return;
+    }
+    _nsfwEnabled = enabled;
+    notifyListeners();
+  }
+
+  Future<void> setFocusEnabled(bool enabled) async {
+    if (!_protectionEnabled && enabled) {
+      return;
+    }
+    _focusEnabled = enabled;
+    if (enabled && !_nsfwEnabled) {
+      _nsfwEnabled = true;
+    }
+    notifyListeners();
   }
 
   Future<void> setProtectionMode(ProtectionMode newMode) async {
@@ -115,6 +140,7 @@ class ProtectionController extends ChangeNotifier {
         _updateState(ProtectionState.on);
       }
       _clearError();
+      _protectionEnabled = true;
       if (!_isAndroid) {
         _markCommandDone();
       }
@@ -126,7 +152,7 @@ class ProtectionController extends ChangeNotifier {
     } catch (e) {
       _markCommandDone();
       debugPrint('ProtectionController.turnOnProtection error: $e');
-      _setError('Не удалось включить защиту. Проверь разрешения VPN.');
+      _setError('Не удалось включить защиту. Проверьте разрешения защиты.');
     }
   }
 
@@ -144,6 +170,7 @@ class ProtectionController extends ChangeNotifier {
         await _channel.invokeMethod('windows_stop_protection');
         _updateState(ProtectionState.off);
       }
+      _protectionEnabled = false;
       if (!_isAndroid) {
         _markCommandDone();
       }
@@ -200,12 +227,19 @@ class ProtectionController extends ChangeNotifier {
     }
   }
 
+  Future<void> resetTodayStats() async {
+    await resetStats();
+  }
+
   Future<void> clearRecentBlocks() async {
     if (!_isAndroid) {
       _stats = ProtectionStats(
         blockedCount: _stats.blockedCount,
         totalRequests: _stats.totalRequests,
         sessionBlocked: _stats.sessionBlocked,
+        blockedNsfw: _stats.blockedNsfw,
+        blockedFocus: _stats.blockedFocus,
+        domainBlockFrequency: _stats.domainBlockFrequency,
         recent: const [],
         isRunning: _stats.isRunning,
         mode: _stats.mode,
@@ -239,6 +273,7 @@ class ProtectionController extends ChangeNotifier {
 
   void _updateState(ProtectionState newState) {
     _state = newState;
+    _protectionEnabled = newState == ProtectionState.on || newState == ProtectionState.reconnecting;
     if (newState != ProtectionState.error) {
       _clearError();
     }
@@ -263,9 +298,9 @@ class ProtectionController extends ChangeNotifier {
   String _mapPlatformError(PlatformException e) {
     switch (e.code) {
       case 'denied':
-        return 'Не хватает разрешения на создание VPN. Разрешите доступ и попробуйте ещё раз.';
+        return 'Не хватает разрешения на создание защиты. Разрешите доступ и попробуйте ещё раз.';
       case 'start_failed':
-        return 'Не удалось запустить VPN. Попробуйте ещё раз или перезагрузите устройство.';
+        return 'Не удалось запустить защиту. Попробуйте ещё раз или перезагрузите устройство.';
       default:
         return e.message ?? 'Произошла ошибка на уровне платформы.';
     }
@@ -286,6 +321,7 @@ class ProtectionController extends ChangeNotifier {
     final mappedState = _mapNativeState(event);
     if (mappedState == null) return;
     _state = mappedState;
+    _protectionEnabled = mappedState == ProtectionState.on || mappedState == ProtectionState.reconnecting;
     if (mappedState != ProtectionState.error) {
       _clearError();
     }
@@ -373,6 +409,9 @@ class ProtectionStats {
     required this.totalRequests,
     required this.sessionBlocked,
     required this.recent,
+    required this.blockedNsfw,
+    required this.blockedFocus,
+    required this.domainBlockFrequency,
     required this.isRunning,
     required this.mode,
     required this.failOpenActive,
@@ -381,13 +420,27 @@ class ProtectionStats {
   final int blockedCount;
   final int totalRequests;
   final int sessionBlocked;
+  final int blockedNsfw;
+  final int blockedFocus;
+  final Map<String, int> domainBlockFrequency;
   final List<BlockedEntry> recent;
   final bool isRunning;
   final ProtectionMode mode;
   final bool failOpenActive;
 
+  int get totalRequestsToday => totalRequests;
+  int get blockedTotalToday => blockedCount;
+  int get blockedNsfwToday => blockedNsfw;
+  int get blockedFocusToday => blockedFocus;
+  String get topStalkerDomainToday {
+    if (domainBlockFrequency.isEmpty) return '—';
+    final sorted = domainBlockFrequency.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return sorted.first.key;
+  }
+
   // --- ИСПРАВЛЕНИЯ: Геттеры для совместимости с вашим UI ---
-  
+
   // UI ожидает vpnActive вместо isRunning
   bool get vpnActive => isRunning; 
   
@@ -415,6 +468,9 @@ class ProtectionStats {
         blockedCount: 0,
         totalRequests: 0,
         sessionBlocked: 0,
+        blockedNsfw: 0,
+        blockedFocus: 0,
+        domainBlockFrequency: {},
         recent: [],
         isRunning: false,
         mode: ProtectionMode.standard,
@@ -474,10 +530,29 @@ class ProtectionStats {
           }()
         : ProtectionMode.standard;
 
+    final blockedNsfwRaw = json['blockedNsfw'];
+    final blockedNsfw = blockedNsfwRaw is num ? blockedNsfwRaw.toInt() : 0;
+
+    final blockedFocusRaw = json['blockedFocus'];
+    final blockedFocus = blockedFocusRaw is num ? blockedFocusRaw.toInt() : 0;
+
+    final freqRaw = json['domainBlockFrequency'];
+    final domainBlockFrequency = <String, int>{};
+    if (freqRaw is Map) {
+      freqRaw.forEach((key, value) {
+        if (key is String && value is num) {
+          domainBlockFrequency[key] = value.toInt();
+        }
+      });
+    }
+
     return ProtectionStats(
       blockedCount: blockedCount,
       totalRequests: totalRequests,
       sessionBlocked: sessionBlocked,
+      blockedNsfw: blockedNsfw,
+      blockedFocus: blockedFocus,
+      domainBlockFrequency: domainBlockFrequency,
       recent: recentEntries,
       isRunning: isRunning,
       mode: parsedMode,
@@ -487,10 +562,11 @@ class ProtectionStats {
 }
 
 class BlockedEntry {
-  const BlockedEntry({required this.domain, required this.timestamp});
+  const BlockedEntry({required this.domain, required this.timestamp, this.category});
 
   final String domain;
   final DateTime timestamp;
+  final String? category;
 
   factory BlockedEntry.fromJson(Map<String, dynamic> json) {
     final timestampRaw = json['timestamp'];
@@ -502,6 +578,7 @@ class BlockedEntry {
     return BlockedEntry(
       domain: (json['domain'] as String?) ?? '',
       timestamp: DateTime.fromMillisecondsSinceEpoch(ts),
+      category: json['category'] as String?,
     );
   }
 }
