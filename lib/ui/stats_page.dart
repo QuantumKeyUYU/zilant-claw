@@ -112,18 +112,7 @@ class _StatsPageState extends State<StatsPage> {
     final failOpen = stats.failOpenActive;
     final isActive = stats.vpnActive;
     final modeLabel = _modeLabel(stats.mode);
-    final modeSummary = () {
-      switch (stats.mode) {
-        case ProtectionMode.ultra:
-          return AppStrings.modes.ultraSummary;
-        case ProtectionMode.advanced:
-          return AppStrings.modes.strictSummary;
-        case ProtectionMode.standard:
-        default:
-          return AppStrings.modes.standardSummary;
-      }
-    }();
-    final showUltraWarning = isActive && stats.mode == ProtectionMode.ultra;
+    final showUltraWarning = stats.mode == ProtectionMode.ultra;
 
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -137,68 +126,80 @@ class _StatsPageState extends State<StatsPage> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Card(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              // surfaceVariant может быть устаревшим в новых версиях Flutter,
-              // используем secondaryContainer как безопасную альтернативу, если surfaceVariant недоступен
-              color: colorScheme.secondaryContainer,
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+            Container(
+              decoration: BoxDecoration(
+                color: isActive ? colorScheme.primaryContainer : colorScheme.surfaceVariant,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    isActive ? Icons.shield_rounded : Icons.shield_outlined,
+                    color: isActive
+                        ? colorScheme.onPrimaryContainer
+                        : colorScheme.onSurfaceVariant,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          isActive
-                              ? Icons.shield_rounded
-                              : Icons.shield_outlined,
-                          color: isActive
-                              ? Colors.green
-                              : colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 8),
                         Text(
                           isActive
                               ? AppStrings.stats.protectionActive
                               : AppStrings.stats.protectionInactive,
-                          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: isActive
+                                ? colorScheme.onPrimaryContainer
+                                : colorScheme.onSurfaceVariant,
+                          ),
                         ),
+                        const SizedBox(height: 6),
+                        if (isActive) ...[
+                          Text(
+                            AppStrings.modes.modeStatus.replaceFirst('%s', modeLabel),
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: isActive
+                                  ? colorScheme.onPrimaryContainer
+                                  : colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            AppStrings.stats.protectionSubtitleOn,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: isActive
+                                  ? colorScheme.onPrimaryContainer.withOpacity(0.9)
+                                  : colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          if (failOpen) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              AppStrings.stats.filterTemporarilyDisabled,
+                              style: textTheme.bodySmall?.copyWith(
+                                color: Colors.amber.shade800,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ] else ...[
+                          Text(
+                            AppStrings.stats.protectionSubtitleOff,
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    if (isActive) ...[
-                      Text(
-                        AppStrings.modes.modeStatus.replaceFirst('%s', modeLabel),
-                        style: textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        modeSummary,
-                        style: textTheme.bodySmall?.copyWith(color: colorScheme.onSecondaryContainer),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        failOpen
-                            ? AppStrings.stats.filterTemporarilyDisabled
-                            : AppStrings.stats.filterActive,
-                        style: TextStyle(
-                          color: failOpen ? Colors.orangeAccent : Colors.green,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ] else ...[
-                      Text(
-                        AppStrings.stats.filterInactiveDescription,
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             if (showUltraWarning) ...[
@@ -208,22 +209,32 @@ class _StatsPageState extends State<StatsPage> {
               ),
             ],
             const SizedBox(height: 12),
-            Card(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('${AppStrings.stats.blockedTotal}: ${stats.totalBlocked}',
-                        style: textTheme.bodyLarge),
-                    const SizedBox(height: 4),
-                    Text('${AppStrings.stats.blockedSession}: ${stats.sessionBlocked}',
-                        style: textTheme.bodyLarge),
-                  ],
-                ),
+            Container(
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceVariant
+                    .withOpacity(colorScheme.brightness == Brightness.dark ? 0.6 : 1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: colorScheme.outline.withOpacity(0.2)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    AppStrings.stats.statsSectionTitle,
+                    style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${AppStrings.stats.blockedTotal}: ${stats.totalBlocked}',
+                    style: textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${AppStrings.stats.blockedSession}: ${stats.sessionBlocked}',
+                    style: textTheme.bodyLarge,
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 12),
@@ -232,7 +243,7 @@ class _StatsPageState extends State<StatsPage> {
               children: [
                 Text(
                   AppStrings.recent.lastBlocked,
-                  style: textTheme.titleMedium,
+                  style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 TextButton(
                   onPressed: stats.recentDomains.isEmpty ? null : () => _showRecent(context, stats.recentDomains),
@@ -256,13 +267,16 @@ class _StatsPageState extends State<StatsPage> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: stats.recentDomains.map((entry) {
-                  // ИСПРАВЛЕНИЕ: entry - это объект BlockedEntry.
-                  // Нам нужно достать из него поле .domain
-                  return ListTile(
-                    leading: const Icon(Icons.public, size: 20),
-                    title: Text(entry.domain),
-                    subtitle: Text(_formatTimestamp(entry.timestamp)),
-                    dense: true,
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.public, size: 20),
+                      title: Text(entry.domain),
+                      subtitle: Text(_formatTimestamp(entry.timestamp)),
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                    ),
                   );
                 }).toList(),
               ),

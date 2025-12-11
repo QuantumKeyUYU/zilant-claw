@@ -9,6 +9,7 @@ class AppStrings {
   static const recent = RecentStrings();
   static const actions = ActionStrings();
   static const errors = ErrorStrings();
+  static const activity = ActivityStrings();
 }
 
 class CommonStrings {
@@ -29,13 +30,13 @@ class HomeStrings {
   final String protectionError = 'Произошла ошибка. Защита не включена.';
   final String protectionOff = 'Защита сейчас отключена.';
   final String progressTurningOn = 'Включаем защиту и готовим фильтр…';
-  final String protectionReconnectingHint = 'Восстанавливаем соединение для стабильной работы.';
+  final String protectionReconnectingHint = 'Восстанавливаем фильтрацию для стабильной работы.';
   final String progressError = 'Повторите попытку — защита пока не запущена.';
-  final String protectionEnabled = 'Защита: включена';
+  final String protectionEnabled = 'Защита: активна';
   final String protectionDisabled = 'Защита: выключена';
   final String protectionUnknown = 'Статус защиты неизвестен';
   final String protectionSubtitleOn =
-      'Фильтрация работает — реклама и трекинг ограничены.';
+      'Фильтруем запросы через защищённый DNS — меньше рекламы и трекинга.';
   final String protectionSubtitleOff =
       'Трафик идёт напрямую — без фильтра.';
   final String protectionHintOn = 'Мы глушим лишний шум: реклама и трекеры уходят в тень.';
@@ -49,7 +50,7 @@ class HomeStrings {
   final String reconnectingSoon = 'повтор через несколько секунд';
   final String permissionRequired = 'Разрешите защиту в системном диалоге, чтобы включить фильтрацию';
   final String todayCardTitle = 'Сегодняшняя активность';
-  final String todayRequests = 'Запросов: %s';
+  final String todayRequests = 'Всего запросов: %s';
   final String todayBlocked = 'Заблокировано: %s';
   final String todayBlockedWithPercent = 'Заблокировано: %s (%s%%)';
   final String todayTrafficSilent = 'Пока тишина: запросов не было.';
@@ -64,11 +65,11 @@ class ModeStrings {
   final String ultra = 'ULTRA';
   final String changed = 'Режим защиты: %s';
   final String hintStandard =
-      'Баланс защиты и стабильности: блокирует рекламу и основные трекеры.';
+      'Баланс защиты и стабильности: скрывает часть рекламы и трекеров, почти не ломает сайты.';
   final String hintStrict =
-      'Усиленная фильтрация: больше рекламы и трекинга блокируется, возможны редкие поломки сайтов.';
+      'Блокирует больше рекламы и трекинга, отдельные элементы сайтов могут работать нестабильно.';
   final String hintUltra =
-      'ULTRA-режим: блокируется максимум рекламы, трекинга и телеметрии, включая экспериментальные домены. Возможны поломки сайтов и приложений.';
+      'Агрессивная фильтрация: реклама, трекинг, OEM-телеметрия и экспериментальные домены. Возможны поломки сайтов и приложений.';
   final String strictModeWarning =
       'Усиленная фильтрация: если что-то ломается — вернитесь в «Стандарт».';
   final String ultraModeWarning =
@@ -90,6 +91,10 @@ class StatsStrings {
   final String headerTitle = 'Статистика и домены';
   final String protectionActive = 'Защита активна';
   final String protectionInactive = 'Защита выключена';
+  final String protectionSubtitleOn =
+      'Фильтрация работает — лишняя реклама и трекинг обрезаются на уровне DNS.';
+  final String protectionSubtitleOff =
+      'Фильтрация отключена — трафик идёт напрямую.';
   final String blockedRequestsLabel = 'Заблокировано запросов: ';
   final String blockedCompact = 'Заблокировано: %s за сеанс / %s всего';
   final String refreshStats = 'Обновить данные';
@@ -101,7 +106,8 @@ class StatsStrings {
   final String noRecentBlocks = 'Нет свежих блокировок';
   final String statsError = 'Не удалось обновить статистику.';
   final String filterInactiveDescription =
-      'Фильтрация не работает — трафик идёт напрямую.';
+      'Фильтрация отключена — трафик идёт напрямую.';
+  final String statsSectionTitle = 'Статистика';
   final String blockedTotal = 'Всего заблокировано';
   final String blockedSession = 'За сессию';
   final String protectionMode = 'Режим';
@@ -180,7 +186,7 @@ class ActionStrings {
   const ActionStrings();
 
   final String grantVpnPermission = 'Выдать разрешение';
-  final String openVpnSettings = 'Открыть настройки';
+  final String openVpnSettings = 'Открыть настройки защиты';
   final String retryStart = 'Попробовать ещё раз';
   final String clearRecent = 'Очистить список';
 }
@@ -195,4 +201,14 @@ class ErrorStrings {
   final String startFailed = 'Не удалось включить защиту. Проверьте системное разрешение.';
   final String stopFailed = 'Не удалось выключить защиту.';
   final String platformTimeout = 'Платформенный вызов завис, попробуйте ещё раз.';
+}
+
+class ActivityStrings {
+  const ActivityStrings();
+
+  final String title = 'Сегодняшняя активность';
+  final String silent = 'Пока тишина: запросов не было.';
+  final String totalRequests = 'Всего запросов: %s';
+  final String blockedRequests = 'Заблокировано: %s';
+  final String blockedWithPercent = 'Заблокировано: %s (%s%%)';
 }

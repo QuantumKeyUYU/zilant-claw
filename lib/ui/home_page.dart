@@ -117,12 +117,12 @@ class _HomePageState extends State<HomePage> {
           padding: const EdgeInsets.all(24),
           children: [
             _buildProtectionCard(context, isOn, isBusy, state, failOpenActive),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             _buildProtectionHint(state),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             _buildModeSelector(context),
             const SizedBox(height: 16),
-            _buildStatsSummary(context, stats),
+            _buildStatsSummary(context, stats, isOn),
             const SizedBox(height: 12),
             _buildStatsActions(context),
             if (widget.controller.statsError != null) ...[
@@ -148,123 +148,132 @@ class _HomePageState extends State<HomePage> {
     final errorMessage = widget.controller.errorMessage;
     final needsPermission = widget.controller.errorCode == 'denied';
 
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final colorScheme = theme.colorScheme;
 
-    return Card(
-      color: Colors.grey.shade100,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        AppStrings.common.title,
-                        style: textTheme.headlineMedium
-                            ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        AppStrings.common.poweredBy,
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey.shade700,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.shield_outlined, color: Colors.black87),
-              ],
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant
+            .withOpacity(colorScheme.brightness == Brightness.dark ? 0.6 : 1),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.22),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            AppStrings.common.title,
+            style: textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
+              color: colorScheme.onSurfaceVariant,
             ),
-            const SizedBox(height: 18),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _StateIndicator(state: state),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isOn
-                            ? AppStrings.home.protectionEnabled
-                            : AppStrings.home.protectionDisabled,
-                        style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _subtitleForState(
-                          state,
-                          needsPermission ? AppStrings.home.permissionRequired : errorMessage,
-                          isOn,
-                        ),
-                        style: textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700),
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            AppStrings.common.poweredBy,
+            style: textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant.withOpacity(0.8),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Switch.adaptive(
-                      value: isOn || state == ProtectionState.starting,
-                      onChanged: isBusy ? null : (_) => _toggleProtection(),
-                      activeColor: Colors.green,
+                    _StateIndicator(
+                      state: state,
+                      textColor: colorScheme.onSurfaceVariant,
                     ),
-                    if (isBusy)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 6),
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
+                    const SizedBox(height: 12),
+                    Text(
+                      isOn
+                          ? AppStrings.home.protectionEnabled
+                          : AppStrings.home.protectionDisabled,
+                      style: textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: colorScheme.onSurfaceVariant,
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _subtitleForState(
+                        state,
+                        needsPermission ? AppStrings.home.permissionRequired : errorMessage,
+                        isOn,
+                      ),
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant.withOpacity(0.85),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ],
                 ),
-              ],
-            ),
-            if (failOpenActive) ...[
-              const SizedBox(height: 12),
-              Text(
-                AppStrings.home.protectionFailOpenWarning,
-                style: textTheme.bodySmall?.copyWith(
-                  color: Colors.amber.shade800,
-                  fontWeight: FontWeight.w600,
-                ),
               ),
-            ],
-            if (state == ProtectionState.error && errorMessage != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                errorMessage,
-                style: const TextStyle(color: Colors.redAccent),
-              ),
-              const SizedBox(height: 6),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: needsPermission
-                    ? ElevatedButton(
-                        onPressed: _requestVpnPermission,
-                        child: Text(AppStrings.actions.openVpnSettings),
-                      )
-                    : ElevatedButton(
-                        onPressed: _toggleProtection,
-                        child: Text(AppStrings.actions.retryStart),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Switch.adaptive(
+                    value: isOn || state == ProtectionState.starting,
+                    onChanged: isBusy ? null : (_) => _toggleProtection(),
+                    activeColor: colorScheme.primary,
+                  ),
+                  if (isBusy)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       ),
-              )
+                    ),
+                ],
+              ),
             ],
+          ),
+          if (failOpenActive) ...[
+            const SizedBox(height: 14),
+            Text(
+              AppStrings.home.protectionFailOpenWarning,
+              style: textTheme.bodySmall?.copyWith(
+                color: Colors.amber.shade800,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
-        ),
+          if (state == ProtectionState.error && errorMessage != null) ...[
+            const SizedBox(height: 14),
+            Text(
+              errorMessage,
+              style: const TextStyle(color: Colors.redAccent),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: needsPermission
+                  ? ElevatedButton(
+                      onPressed: _requestVpnPermission,
+                      child: Text(AppStrings.actions.openVpnSettings),
+                    )
+                  : ElevatedButton(
+                      onPressed: _toggleProtection,
+                      child: Text(AppStrings.actions.retryStart),
+                    ),
+            )
+          ],
+        ],
       ),
     );
   }
@@ -287,30 +296,39 @@ class _HomePageState extends State<HomePage> {
     }();
     return Text(
       text,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700),
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8)),
     );
   }
 
   Widget _buildModeSelector(BuildContext context) {
     final currentMode = widget.controller.mode;
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              AppStrings.modes.label,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant
+            .withOpacity(colorScheme.brightness == Brightness.dark ? 0.55 : 1),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colorScheme.outline.withOpacity(0.2)),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            AppStrings.modes.label,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: colorScheme.onSurfaceVariant,
             ),
-            const SizedBox(height: 8),
-            DropdownButton<ProtectionMode>(
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<ProtectionMode>(
               value: currentMode,
               isExpanded: true,
+              dropdownColor: colorScheme.surfaceVariant,
               onChanged: _isChangingMode ? null : (mode) => mode != null ? _changeMode(mode) : null,
               items: const [
                 ProtectionMode.standard,
@@ -320,145 +338,160 @@ class _HomePageState extends State<HomePage> {
                   .map(
                     (mode) => DropdownMenuItem(
                       value: mode,
-                      child: Text(_modeLabel(mode)),
+                      child: Text(
+                        _modeLabel(mode),
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                     ),
                   )
                   .toList(),
             ),
-            const SizedBox(height: 6),
-            Text(
-              _modeDescription(currentMode),
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _modeDescription(currentMode),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant.withOpacity(0.8),
+              fontWeight: FontWeight.w500,
             ),
-            if (currentMode == ProtectionMode.ultra) ...[
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.warning_amber_rounded, color: Colors.amber.shade800, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        AppStrings.modes.ultraModeWarning,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: Colors.amber.shade800, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
+          ),
+          if (currentMode == ProtectionMode.ultra) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber.shade200),
               ),
-            ],
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.amber.shade800, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      AppStrings.modes.ultraModeWarning,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: Colors.amber.shade800, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildStatsSummary(BuildContext context, ProtectionStats stats) {
+  Widget _buildStatsSummary(
+      BuildContext context, ProtectionStats stats, bool protectionOn) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     final total = stats.totalRequests;
-    final blocked = stats.sessionBlocked;
-    final hasTraffic = total > 0;
-    final percent = (hasTraffic && blocked > 0) ? (blocked / total) * 100 : null;
+    final blocked = stats.totalBlocked;
+    final hasTraffic = protectionOn && total > 0;
+    final percent = (hasTraffic && blocked > 0)
+        ? ((blocked / total) * 100).round()
+        : null;
 
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const Icon(Icons.timelapse_outlined, color: Colors.indigo),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    AppStrings.home.todayCardTitle,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant
+            .withOpacity(colorScheme.brightness == Brightness.dark ? 0.55 : 1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colorScheme.outline.withOpacity(0.25)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(Icons.timelapse_outlined, color: colorScheme.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  AppStrings.activity.title,
+                  style: textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.onSurfaceVariant,
                   ),
-                  const SizedBox(height: 6),
-                  if (!hasTraffic)
-                    Text(
-                      AppStrings.home.todayTrafficSilent,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: Colors.grey.shade800),
-                    )
-                  else ...[
-                    Text(
-                      AppStrings.home.todayRequests.replaceFirst('%s', total.toString()),
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: Colors.grey.shade800),
+                ),
+                const SizedBox(height: 6),
+                if (!hasTraffic)
+                  Text(
+                    AppStrings.activity.silent,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant.withOpacity(0.85),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      percent != null
-                          ? AppStrings.home.todayBlockedWithPercent
-                              .replaceFirst('%s', blocked.toString())
-                              .replaceFirst('%s',
-                                  percent >= 10 ? percent.toStringAsFixed(0) : percent.toStringAsFixed(1))
-                          : AppStrings.home.todayBlocked.replaceFirst('%s', blocked.toString()),
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: Colors.grey.shade800),
+                  )
+                else ...[
+                  Text(
+                    AppStrings.activity.totalRequests.replaceFirst('%s', total.toString()),
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
                     ),
-                  ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    percent != null
+                        ? AppStrings.activity.blockedWithPercent
+                            .replaceFirst('%s', blocked.toString())
+                            .replaceFirst('%s', percent.toString())
+                        : AppStrings.activity.blockedRequests.replaceFirst('%s', blocked.toString()),
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 ],
-              ),
+              ],
             ),
-            if (_isRefreshing)
-              const SizedBox(
-                height: 28,
-                width: 28,
-                child: CircularProgressIndicator(strokeWidth: 3),
-              ),
-          ],
-        ),
+          ),
+          if (_isRefreshing)
+            const SizedBox(
+              height: 28,
+              width: 28,
+              child: CircularProgressIndicator(strokeWidth: 3),
+            ),
+        ],
       ),
     );
   }
 
   Widget _buildStatsActions(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(14));
+    final padding = const EdgeInsets.symmetric(vertical: 14);
     return Row(
       children: [
         Expanded(
-          child: SizedBox(
-            height: 48,
-            child: ElevatedButton(
-              onPressed: () => _goToStats(context),
-              child: Text(AppStrings.stats.details),
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+              shape: shape,
+              padding: padding,
             ),
+            onPressed: () => _goToStats(context),
+            child: Text(AppStrings.stats.details),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: SizedBox(
-            height: 48,
-            child: OutlinedButton.icon(
-              onPressed: _resetStats,
-              icon: const Icon(Icons.delete_outline),
-              label: Text(AppStrings.stats.resetStats),
+          child: OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              shape: shape,
+              padding: padding,
+              side: BorderSide(color: colorScheme.primary),
+              foregroundColor: colorScheme.primary,
             ),
+            onPressed: _resetStats,
+            child: Text(AppStrings.stats.resetStats),
           ),
         ),
       ],
@@ -510,9 +543,10 @@ class _HomePageState extends State<HomePage> {
 }
 
 class _StateIndicator extends StatelessWidget {
-  const _StateIndicator({required this.state});
+  const _StateIndicator({required this.state, this.textColor});
 
   final ProtectionState state;
+  final Color? textColor;
 
   Color _colorForState() {
     switch (state) {
@@ -547,6 +581,7 @@ class _StateIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final labelColor = textColor ?? Theme.of(context).colorScheme.onSurfaceVariant;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -557,7 +592,7 @@ class _StateIndicator extends StatelessWidget {
           style: Theme.of(context)
               .textTheme
               .labelMedium
-              ?.copyWith(color: Colors.grey.shade800, fontWeight: FontWeight.w600),
+              ?.copyWith(color: labelColor, fontWeight: FontWeight.w600),
         ),
       ],
     );
