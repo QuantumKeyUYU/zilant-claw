@@ -122,7 +122,7 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 16),
             _buildModeSelector(context),
             const SizedBox(height: 16),
-            _buildStatsSummary(context, stats.blockedCount, stats.sessionBlocked),
+            _buildStatsSummary(context, stats),
             const SizedBox(height: 12),
             _buildStatsActions(context),
             if (widget.controller.statsError != null) ...[
@@ -148,13 +148,6 @@ class _HomePageState extends State<HomePage> {
     final errorMessage = widget.controller.errorMessage;
     final needsPermission = widget.controller.errorCode == 'denied';
 
-    final title = _titleForState(state, isOn);
-    final subtitle = _subtitleForState(
-      state,
-      needsPermission ? AppStrings.home.permissionRequired : errorMessage,
-      isOn,
-    );
-
     return Card(
       color: Colors.blueGrey.shade900,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -163,25 +156,47 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(
+              AppStrings.common.title,
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineMedium
+                  ?.copyWith(color: Colors.white, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              AppStrings.common.poweredBy,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: Colors.white70, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 16),
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                _StateIndicator(state: state),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        title,
+                        isOn
+                            ? AppStrings.home.protectionEnabled
+                            : AppStrings.home.protectionDisabled,
                         style: Theme.of(context)
                             .textTheme
-                            .headlineSmall
+                            .titleMedium
                             ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
                       ),
-                      const SizedBox(height: 6),
-                      _StateIndicator(state: state),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(
-                        subtitle,
+                        _subtitleForState(
+                          state,
+                          needsPermission ? AppStrings.home.permissionRequired : errorMessage,
+                          isOn,
+                        ),
                         style: Theme.of(context)
                             .textTheme
                             .bodyMedium
@@ -352,24 +367,47 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildStatsSummary(BuildContext context, int blockedCount, int sessionBlocked) {
-    final summary = AppStrings.stats.blockedCompact
-        .replaceFirst('%s', sessionBlocked.toString())
-        .replaceFirst('%s', blockedCount.toString());
+  Widget _buildStatsSummary(BuildContext context, ProtectionStats stats) {
+    final total = stats.totalRequests;
+    final blocked = stats.sessionBlocked;
+    String summary;
+    if (total <= 0) {
+      summary = AppStrings.home.todayTrafficSilent;
+    } else {
+      final percent = total == 0 ? 0 : (blocked / total) * 100;
+      final percentText = percent >= 10 ? percent.toStringAsFixed(0) : percent.toStringAsFixed(1);
+      summary = AppStrings.home.todayTrafficSummary
+          .replaceFirst('%s', total.toString())
+          .replaceFirst('%s', blocked.toString())
+          .replaceFirst('%s', percentText);
+    }
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Icon(Icons.shield, color: Colors.green),
+            const Icon(Icons.timelapse_outlined, color: Colors.indigo),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                summary,
-                style:
-                    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    AppStrings.home.todayCardTitle,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    summary,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade800),
+                  ),
+                ],
               ),
             ),
             if (_isRefreshing)
@@ -424,23 +462,6 @@ class _HomePageState extends State<HomePage> {
         return AppStrings.modes.hintStrict;
       case ProtectionMode.ultra:
         return AppStrings.modes.hintUltra;
-    }
-  }
-
-  String _titleForState(ProtectionState state, bool isOn) {
-    switch (state) {
-      case ProtectionState.starting:
-        return AppStrings.home.protectionTurningOn;
-      case ProtectionState.reconnecting:
-        return AppStrings.home.protectionReconnecting;
-      case ProtectionState.error:
-        return AppStrings.home.protectionUnknown;
-      case ProtectionState.on:
-      case ProtectionState.off:
-      default:
-        return isOn
-            ? AppStrings.home.protectionEnabled
-            : AppStrings.home.protectionDisabled;
     }
   }
 

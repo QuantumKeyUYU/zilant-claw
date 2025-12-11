@@ -204,6 +204,7 @@ class ProtectionController extends ChangeNotifier {
     if (!_isAndroid) {
       _stats = ProtectionStats(
         blockedCount: _stats.blockedCount,
+        totalRequests: _stats.totalRequests,
         sessionBlocked: _stats.sessionBlocked,
         recent: const [],
         isRunning: _stats.isRunning,
@@ -369,6 +370,7 @@ class ProtectionController extends ChangeNotifier {
 class ProtectionStats {
   const ProtectionStats({
     required this.blockedCount,
+    required this.totalRequests,
     required this.sessionBlocked,
     required this.recent,
     required this.isRunning,
@@ -377,6 +379,7 @@ class ProtectionStats {
   });
 
   final int blockedCount;
+  final int totalRequests;
   final int sessionBlocked;
   final List<BlockedEntry> recent;
   final bool isRunning;
@@ -410,6 +413,7 @@ class ProtectionStats {
 
   factory ProtectionStats.empty() => const ProtectionStats(
         blockedCount: 0,
+        totalRequests: 0,
         sessionBlocked: 0,
         recent: [],
         isRunning: false,
@@ -442,6 +446,13 @@ class ProtectionStats {
             ? sessionRaw.toInt()
             : 0;
 
+    final totalRequestsRaw = json['totalRequests'];
+    final totalRequests = totalRequestsRaw is int
+        ? totalRequestsRaw
+        : totalRequestsRaw is num
+            ? totalRequestsRaw.toInt()
+            : 0;
+
     final runningRaw = json['running'];
     final isRunning = runningRaw is bool ? runningRaw : false;
 
@@ -465,6 +476,7 @@ class ProtectionStats {
 
     return ProtectionStats(
       blockedCount: blockedCount,
+      totalRequests: totalRequests,
       sessionBlocked: sessionBlocked,
       recent: recentEntries,
       isRunning: isRunning,
