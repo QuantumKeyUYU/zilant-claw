@@ -18,7 +18,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool _isRefreshing = false;
-  bool _isChangingMode = false;
 
   @override
   void initState() {
@@ -50,7 +49,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _resetStats() async {
-    await widget.controller.resetStats();
+    await widget.controller.resetTodayStats();
   }
 
   Future<void> _requestVpnPermission() async {
@@ -74,28 +73,11 @@ class _HomePageState extends State<HomePage> {
     await widget.controller.refreshStats();
   }
 
-  Future<void> _changeMode(ProtectionMode mode) async {
-    if (_isChangingMode) return;
-    setState(() => _isChangingMode = true);
-    await widget.controller.setProtectionMode(mode);
-    if (mounted) {
-      final error = widget.controller.statsError;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            error ?? AppStrings.modes.changed.replaceFirst('%s', _modeLabel(mode)),
-          ),
-        ),
-      );
-    }
-    setState(() => _isChangingMode = false);
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = widget.controller.state;
     final stats = widget.controller.stats;
-    final isOn = state == ProtectionState.on || state == ProtectionState.reconnecting;
+    final isOn = widget.controller.protectionEnabled;
     final failOpenActive = stats.failOpenActive;
     final isBusy = widget.controller.isCommandInFlight || state == ProtectionState.starting;
 
@@ -117,12 +99,10 @@ class _HomePageState extends State<HomePage> {
           padding: const EdgeInsets.all(24),
           children: [
             _buildProtectionCard(context, isOn, isBusy, state, failOpenActive),
-            const SizedBox(height: 12),
-            _buildProtectionHint(state),
-            const SizedBox(height: 18),
-            _buildModeSelector(context),
             const SizedBox(height: 16),
-            _buildStatsSummary(context, stats, isOn),
+            _buildDetoxModes(context, isOn),
+            const SizedBox(height: 16),
+            _buildTodayStats(context, stats),
             const SizedBox(height: 12),
             _buildStatsActions(context),
             if (widget.controller.statsError != null) ...[
@@ -169,20 +149,26 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            AppStrings.common.title,
-            style: textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            AppStrings.common.poweredBy,
-            style: textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant.withOpacity(0.8),
-              fontWeight: FontWeight.w600,
+          Center(
+            child: Column(
+              children: [
+                Text(
+                  AppStrings.common.title,
+                  style: textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  AppStrings.common.poweredBy,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant.withOpacity(0.8),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 20),
@@ -193,15 +179,15 @@ class _HomePageState extends State<HomePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _StateIndicator(
-                      state: state,
+                    _StatusIndicator(
+                      active: isOn,
                       textColor: colorScheme.onSurfaceVariant,
                     ),
                     const SizedBox(height: 12),
                     Text(
                       isOn
-                          ? AppStrings.home.protectionEnabled
-                          : AppStrings.home.protectionDisabled,
+                          ? AppStrings.home.protectionOnTitle
+                          : AppStrings.home.protectionOffTitle,
                       style: textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: colorScheme.onSurfaceVariant,
@@ -278,33 +264,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildProtectionHint(ProtectionState state) {
-    final text = () {
-      switch (state) {
-        case ProtectionState.on:
-          return AppStrings.home.protectionHintOn;
-        case ProtectionState.reconnecting:
-          return '${AppStrings.home.protectionHintReconnecting} (${AppStrings.home.reconnectingSoon})';
-        case ProtectionState.starting:
-          return AppStrings.home.progressTurningOn;
-        case ProtectionState.error:
-          return AppStrings.home.protectionHintError;
-        case ProtectionState.off:
-        default:
-          return AppStrings.home.protectionHintOff;
-      }
-    }();
-    return Text(
-      text,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8)),
-    );
-  }
+  Widget _buildDetoxModes(BuildContext context, bool protectionOn) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final nsfwEnabled = widget.controller.nsfwEnabled;
+    final focusEnabled = widget.controller.focusEnabled;
 
-  Widget _buildModeSelector(BuildContext context) {
-    final currentMode = widget.controller.mode;
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surfaceVariant
@@ -317,88 +282,41 @@ class _HomePageState extends State<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            AppStrings.modes.label,
-            style: theme.textTheme.titleMedium?.copyWith(
+            AppStrings.home.detoxHeader,
+            style: textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
               color: colorScheme.onSurfaceVariant,
             ),
           ),
+          const SizedBox(height: 12),
+          _DetoxTile(
+            title: AppStrings.home.nsfwTitle,
+            subtitle: AppStrings.home.nsfwSubtitle,
+            hint: AppStrings.home.nsfwHint,
+            value: nsfwEnabled,
+            enabled: protectionOn,
+            onChanged: (value) => widget.controller.setNsfwEnabled(value),
+          ),
           const SizedBox(height: 10),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<ProtectionMode>(
-              value: currentMode,
-              isExpanded: true,
-              dropdownColor: colorScheme.surfaceVariant,
-              onChanged: _isChangingMode ? null : (mode) => mode != null ? _changeMode(mode) : null,
-              items: const [
-                ProtectionMode.standard,
-                ProtectionMode.advanced,
-                ProtectionMode.ultra,
-              ]
-                  .map(
-                    (mode) => DropdownMenuItem(
-                      value: mode,
-                      child: Text(
-                        _modeLabel(mode),
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
+          _DetoxTile(
+            title: AppStrings.home.focusTitle,
+            subtitle: AppStrings.home.focusSubtitle,
+            hint: AppStrings.home.focusHint,
+            value: focusEnabled,
+            enabled: protectionOn,
+            onChanged: (value) => widget.controller.setFocusEnabled(value),
           ),
-          const SizedBox(height: 8),
-          Text(
-            _modeDescription(currentMode),
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant.withOpacity(0.8),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          if (currentMode == ProtectionMode.ultra) ...[
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.amber.shade50,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.amber.shade200),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.amber.shade800, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      AppStrings.modes.ultraModeWarning,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: Colors.amber.shade800, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
 
-  Widget _buildStatsSummary(
-      BuildContext context, ProtectionStats stats, bool protectionOn) {
+  Widget _buildTodayStats(BuildContext context, ProtectionStats stats) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final total = stats.totalRequests;
-    final blocked = stats.totalBlocked;
-    final hasTraffic = protectionOn && total > 0;
-    final percent = (hasTraffic && blocked > 0)
-        ? ((blocked / total) * 100).round()
-        : null;
+    final total = stats.totalRequestsToday;
+    final blocked = stats.blockedTotalToday;
+    final topStalker = stats.topStalkerDomainToday;
 
     return Container(
       decoration: BoxDecoration(
@@ -408,58 +326,31 @@ class _HomePageState extends State<HomePage> {
         border: Border.all(color: colorScheme.outline.withOpacity(0.25)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.timelapse_outlined, color: colorScheme.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  AppStrings.activity.title,
-                  style: textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                if (!hasTraffic)
-                  Text(
-                    AppStrings.activity.silent,
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant.withOpacity(0.85),
-                    ),
-                  )
-                else ...[
-                  Text(
-                    AppStrings.activity.totalRequests.replaceFirst('%s', total.toString()),
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    percent != null
-                        ? AppStrings.activity.blockedWithPercent
-                            .replaceFirst('%s', blocked.toString())
-                            .replaceFirst('%s', percent.toString())
-                        : AppStrings.activity.blockedRequests.replaceFirst('%s', blocked.toString()),
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ],
+          Text(
+            AppStrings.home.todayHeader,
+            style: textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: colorScheme.onSurfaceVariant,
             ),
           ),
-          if (_isRefreshing)
-            const SizedBox(
-              height: 28,
-              width: 28,
-              child: CircularProgressIndicator(strokeWidth: 3),
-            ),
+          const SizedBox(height: 12),
+          Text(
+            AppStrings.home.todayTotalRequests.replaceFirst('%d', total.toString()),
+            style: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            AppStrings.home.todayBlocked.replaceFirst('%d', blocked.toString()),
+            style: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            AppStrings.home.todayTopStalker.replaceFirst('%s', topStalker),
+            style: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurfaceVariant),
+          ),
         ],
       ),
     );
@@ -498,28 +389,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  String _modeLabel(ProtectionMode mode) {
-    switch (mode) {
-      case ProtectionMode.standard:
-        return AppStrings.modes.standard;
-      case ProtectionMode.advanced:
-        return AppStrings.modes.strict;
-      case ProtectionMode.ultra:
-        return AppStrings.modes.ultra;
-    }
-  }
-
-  String _modeDescription(ProtectionMode mode) {
-    switch (mode) {
-      case ProtectionMode.standard:
-        return AppStrings.modes.hintStandard;
-      case ProtectionMode.advanced:
-        return AppStrings.modes.hintStrict;
-      case ProtectionMode.ultra:
-        return AppStrings.modes.hintUltra;
-    }
-  }
-
   String _subtitleForState(
     ProtectionState state,
     String? errorMessage,
@@ -542,57 +411,91 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-class _StateIndicator extends StatelessWidget {
-  const _StateIndicator({required this.state, this.textColor});
+class _StatusIndicator extends StatelessWidget {
+  const _StatusIndicator({required this.active, this.textColor});
 
-  final ProtectionState state;
+  final bool active;
   final Color? textColor;
-
-  Color _colorForState() {
-    switch (state) {
-      case ProtectionState.on:
-        return Colors.greenAccent;
-      case ProtectionState.starting:
-      case ProtectionState.reconnecting:
-        return Colors.amberAccent;
-      case ProtectionState.error:
-        return Colors.redAccent;
-      case ProtectionState.off:
-      default:
-        return Colors.white70;
-    }
-  }
-
-  String _labelForState() {
-    switch (state) {
-      case ProtectionState.on:
-        return AppStrings.stats.stateOn;
-      case ProtectionState.starting:
-        return AppStrings.stats.stateStarting;
-      case ProtectionState.reconnecting:
-        return AppStrings.stats.stateReconnecting;
-      case ProtectionState.error:
-        return AppStrings.stats.stateError;
-      case ProtectionState.off:
-      default:
-        return AppStrings.stats.stateOff;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    final labelColor = textColor ?? Theme.of(context).colorScheme.onSurfaceVariant;
+    final colorScheme = Theme.of(context).colorScheme;
+    final labelColor = textColor ?? colorScheme.onSurfaceVariant;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.circle, size: 10, color: _colorForState()),
+        Icon(Icons.circle, size: 10, color: active ? Colors.greenAccent : Colors.grey),
         const SizedBox(width: 6),
         Text(
-          _labelForState(),
+          active ? AppStrings.home.statusOn : AppStrings.home.statusOff,
           style: Theme.of(context)
               .textTheme
               .labelMedium
               ?.copyWith(color: labelColor, fontWeight: FontWeight.w600),
+        ),
+      ],
+    );
+  }
+}
+
+class _DetoxTile extends StatelessWidget {
+  const _DetoxTile({
+    required this.title,
+    required this.subtitle,
+    required this.hint,
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String subtitle;
+  final String hint;
+  final bool value;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant.withOpacity(0.85),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                hint,
+                style: textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant.withOpacity(0.65),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Switch.adaptive(
+          value: value,
+          onChanged: enabled ? onChanged : null,
+          activeColor: colorScheme.primary,
         ),
       ],
     );

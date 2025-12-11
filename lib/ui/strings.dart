@@ -32,28 +32,29 @@ class HomeStrings {
   final String progressTurningOn = 'Включаем защиту и готовим фильтр…';
   final String protectionReconnectingHint = 'Восстанавливаем фильтрацию для стабильной работы.';
   final String progressError = 'Повторите попытку — защита пока не запущена.';
-  final String protectionEnabled = 'Защита: активна';
-  final String protectionDisabled = 'Защита: выключена';
-  final String protectionUnknown = 'Статус защиты неизвестен';
+  final String protectionOnTitle = 'Защита: активна';
+  final String protectionOffTitle = 'Защита: выключена';
   final String protectionSubtitleOn =
       'Фильтруем запросы через защищённый DNS — меньше рекламы и трекинга.';
-  final String protectionSubtitleOff =
-      'Трафик идёт напрямую — без фильтра.';
-  final String protectionHintOn = 'Мы глушим лишний шум: реклама и трекеры уходят в тень.';
-  final String protectionHintReconnecting =
-      'Мы восстанавливаем фильтрацию, всё вернётся через пару секунд.';
-  final String protectionHintError =
-      'Произошла ошибка. Повторите попытку и проверьте разрешения.';
-  final String protectionHintOff = 'Всё идёт напрямую — фильтрация отключена.';
+  final String protectionSubtitleOff = 'Трафик идёт напрямую — без фильтра.';
+  final String statusOn = 'Активна';
+  final String statusOff = 'Выключена';
   final String protectionFailOpenWarning =
       'Фильтр временно ослаблен — DNS не отвечает, чтобы не ломать интернет мы пропускаем трафик без блокировки.';
   final String reconnectingSoon = 'повтор через несколько секунд';
   final String permissionRequired = 'Разрешите защиту в системном диалоге, чтобы включить фильтрацию';
-  final String todayCardTitle = 'Сегодняшняя активность';
-  final String todayRequests = 'Всего запросов: %s';
-  final String todayBlocked = 'Заблокировано: %s';
-  final String todayBlockedWithPercent = 'Заблокировано: %s (%s%%)';
-  final String todayTrafficSilent = 'Пока тишина: запросов не было.';
+  final String detoxHeader = 'Детокс-режимы';
+  final String nsfwTitle = 'NSFW-фильтр';
+  final String nsfwSubtitle = 'Скрывать порно и откровенный adult-контент.';
+  final String nsfwHint = 'Работает только когда защита включена.';
+  final String focusTitle = 'Фокус-режим';
+  final String focusSubtitle =
+      'Режем TikTok, шортсы и другие пожиратели времени, мессенджеры остаются.';
+  final String focusHint = 'При включении фокуса NSFW-фильтр включается автоматически.';
+  final String todayHeader = 'Сегодня';
+  final String todayTotalRequests = 'Всего запросов: %d';
+  final String todayBlocked = 'Заблокировано: %d';
+  final String todayTopStalker = 'Топ-сталкер: %s';
 }
 
 class ModeStrings {
@@ -88,39 +89,24 @@ class ModeStrings {
 class StatsStrings {
   const StatsStrings();
 
-  final String headerTitle = 'Статистика и домены';
+  final String headerTitle = 'Статистика';
   final String protectionActive = 'Защита активна';
   final String protectionInactive = 'Защита выключена';
   final String protectionSubtitleOn =
-      'Фильтрация работает — лишняя реклама и трекинг обрезаются на уровне DNS.';
-  final String protectionSubtitleOff =
-      'Фильтрация отключена — трафик идёт напрямую.';
-  final String blockedRequestsLabel = 'Заблокировано запросов: ';
-  final String blockedCompact = 'Заблокировано: %s за сеанс / %s всего';
+      'Мы глушим лишний шум — реклама и трекеры уходят в тень.';
+  final String protectionSubtitleOff = 'Фильтрация отключена — трафик идёт напрямую.';
   final String refreshStats = 'Обновить данные';
   final String resetStats = 'Сбросить статистику';
   final String details = 'Подробнее';
-  final String recentTitle = 'Недавние заблокированные домены';
-  final String recentPreview = 'Недавние заблокированные домены: %d (смотреть)';
-  final String nothingBlocked = 'Пока ничего не заблокировано — вы в чистом интернете 😌';
-  final String noRecentBlocks = 'Нет свежих блокировок';
-  final String statsError = 'Не удалось обновить статистику.';
-  final String filterInactiveDescription =
-      'Фильтрация отключена — трафик идёт напрямую.';
   final String statsSectionTitle = 'Статистика';
-  final String blockedTotal = 'Всего заблокировано';
-  final String blockedSession = 'За сессию';
-  final String protectionMode = 'Режим';
-  final String filterTemporarilyDisabled = 'Фильтрация временно отключена';
-  final String filterActive = 'Фильтрация работает';
-  final String showAll = 'Показать всё';
-  final String stateOn = 'Активна';
-  final String stateStarting = 'Запускается';
-  final String stateReconnecting = 'Переподключение';
-  final String stateError = 'Ошибка';
-  final String stateOff = 'Выключена';
-  final String totalLabel = 'Всего';
-  final String sessionLabel = 'За сеанс';
+  final String statsTotal = 'Всего запросов: %d';
+  final String statsBlockedTotal = 'Заблокировано всего: %d';
+  final String statsBlockedNsfw = 'Из них NSFW: %d';
+  final String statsBlockedFocus = 'Из них Фокус-режим: %d';
+  final String statsRecentBlocked = 'Последние заблокированные';
+  final String statsRecentEmpty = 'Пока ничего не заблокировано — вы в чистом интернете 😌';
+  final String modesActive = 'Режимы: %s';
+  final String modesNone = 'Режимы: нет';
 }
 
 class ProtectionInfoStrings {

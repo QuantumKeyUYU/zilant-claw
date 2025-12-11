@@ -29,91 +29,11 @@ class _StatsPageState extends State<StatsPage> {
     setState(() {});
   }
 
-  void _showRecent(BuildContext context, List<BlockedEntry> items) {
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(AppStrings.recent.header, style: Theme.of(ctx).textTheme.titleMedium),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: ListView.separated(
-                    itemCount: items.length,
-                    separatorBuilder: (_, __) => const Divider(height: 8),
-                    itemBuilder: (_, index) {
-                      final entry = items.reversed.elementAt(index);
-                      return ListTile(
-                        dense: true,
-                        leading: const Icon(Icons.public, size: 20),
-                        title: Text(entry.domain),
-                        subtitle: Text(_formatTimestamp(entry.timestamp)),
-                      );
-                    },
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () {
-                      Navigator.of(ctx).maybePop();
-                      widget.controller.clearRecentBlocks();
-                    },
-                    icon: const Icon(Icons.delete_outline),
-                    label: Text(AppStrings.actions.clearRecent),
-                  ),
-                )
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  String _formatTimestamp(DateTime timestamp) {
-    final local = timestamp.toLocal();
-    final now = DateTime.now();
-    final diff = now.difference(local);
-
-    if (diff.inMinutes < 1) return AppStrings.recent.timestampJustNow;
-
-    if (now.day == local.day && now.month == local.month && now.year == local.year) {
-      return _formatTime(local);
-    }
-
-    final yesterday = now.subtract(const Duration(days: 1));
-    if (yesterday.day == local.day && yesterday.month == local.month && yesterday.year == local.year) {
-      return AppStrings.recent.yesterday;
-    }
-
-    if (diff.inDays < 7) {
-      return '${diff.inDays} ${AppStrings.recent.daysAgoSuffix}';
-    }
-
-    return '${local.day.toString().padLeft(2, '0')}.${local.month.toString().padLeft(2, '0')} ${_formatTime(local)}';
-  }
-
-  String _formatTime(DateTime value) {
-    final hours = value.hour.toString().padLeft(2, '0');
-    final minutes = value.minute.toString().padLeft(2, '0');
-    return '$hours:$minutes';
-  }
-
   @override
   Widget build(BuildContext context) {
-    // Используем геттеры, которые мы добавили в контроллер на предыдущем шаге
     final stats = widget.controller.stats;
-    final failOpen = stats.failOpenActive;
-    final isActive = stats.vpnActive;
-    final modeLabel = _modeLabel(stats.mode);
-    final showUltraWarning = stats.mode == ProtectionMode.ultra;
-
+    final protectionOn = widget.controller.protectionEnabled;
+    final modes = _activeModes();
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
@@ -128,86 +48,60 @@ class _StatsPageState extends State<StatsPage> {
           children: [
             Container(
               decoration: BoxDecoration(
-                color: isActive ? colorScheme.primaryContainer : colorScheme.surfaceVariant,
+                color: protectionOn ? colorScheme.primaryContainer : colorScheme.surfaceVariant,
                 borderRadius: BorderRadius.circular(18),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-              child: Row(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    isActive ? Icons.shield_rounded : Icons.shield_outlined,
-                    color: isActive
-                        ? colorScheme.onPrimaryContainer
-                        : colorScheme.onSurfaceVariant,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isActive
-                              ? AppStrings.stats.protectionActive
-                              : AppStrings.stats.protectionInactive,
-                          style: textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: isActive
-                                ? colorScheme.onPrimaryContainer
-                                : colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        if (isActive) ...[
-                          Text(
-                            AppStrings.modes.modeStatus.replaceFirst('%s', modeLabel),
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: isActive
-                                  ? colorScheme.onPrimaryContainer
-                                  : colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            AppStrings.stats.protectionSubtitleOn,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: isActive
-                                  ? colorScheme.onPrimaryContainer.withOpacity(0.9)
-                                  : colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          if (failOpen) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              AppStrings.stats.filterTemporarilyDisabled,
-                              style: textTheme.bodySmall?.copyWith(
-                                color: Colors.amber.shade800,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ] else ...[
-                          Text(
-                            AppStrings.stats.protectionSubtitleOff,
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ],
+                  Text(
+                    protectionOn ? AppStrings.stats.protectionActive : AppStrings.stats.protectionInactive,
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: protectionOn ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  const SizedBox(height: 6),
+                  Text(
+                    modes.isEmpty
+                        ? AppStrings.stats.modesNone
+                        : AppStrings.stats.modesActive.replaceFirst('%s', modes.join(', ')),
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: protectionOn ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  if (protectionOn)
+                    Text(
+                      AppStrings.stats.protectionSubtitleOn,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: protectionOn
+                            ? colorScheme.onPrimaryContainer.withOpacity(0.9)
+                            : colorScheme.onSurfaceVariant,
+                      ),
+                    )
+                  else
+                    Text(
+                      AppStrings.stats.protectionSubtitleOff,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  if (stats.failOpenActive) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      AppStrings.home.protectionFailOpenWarning,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: Colors.amber.shade800,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ]
                 ],
               ),
             ),
-            if (showUltraWarning) ...[
-              const SizedBox(height: 12),
-              _StrictModeBanner(
-                message: AppStrings.modes.ultraModeWarning,
-              ),
-            ],
             const SizedBox(height: 12),
             Container(
               decoration: BoxDecoration(
@@ -224,32 +118,37 @@ class _StatsPageState extends State<StatsPage> {
                     AppStrings.stats.statsSectionTitle,
                     style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${AppStrings.stats.blockedTotal}: ${stats.totalBlocked}',
-                    style: textTheme.bodyLarge,
+                  const SizedBox(height: 10),
+                  _StatRow(
+                    label:
+                        AppStrings.stats.statsTotal.replaceFirst('%d', stats.totalRequestsToday.toString()),
+                    value: '',
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    '${AppStrings.stats.blockedSession}: ${stats.sessionBlocked}',
-                    style: textTheme.bodyLarge,
+                  _StatRow(
+                    label: AppStrings.stats.statsBlockedTotal
+                        .replaceFirst('%d', stats.blockedTotalToday.toString()),
+                    value: '',
+                  ),
+                  const SizedBox(height: 6),
+                  _StatRow(
+                    label: AppStrings.stats.statsBlockedNsfw
+                        .replaceFirst('%d', stats.blockedNsfwToday.toString()),
+                    value: '',
+                  ),
+                  const SizedBox(height: 6),
+                  _StatRow(
+                    label: AppStrings.stats.statsBlockedFocus
+                        .replaceFirst('%d', stats.blockedFocusToday.toString()),
+                    value: '',
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  AppStrings.recent.lastBlocked,
-                  style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                TextButton(
-                  onPressed: stats.recentDomains.isEmpty ? null : () => _showRecent(context, stats.recentDomains),
-                  child: Text(AppStrings.stats.showAll),
-                )
-              ],
+            Text(
+              AppStrings.stats.statsRecentBlocked,
+              style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             if (stats.recentDomains.isEmpty)
@@ -257,7 +156,7 @@ class _StatsPageState extends State<StatsPage> {
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Text(
-                    AppStrings.recent.empty,
+                    AppStrings.stats.statsRecentEmpty,
                     style: textTheme.bodyMedium,
                     textAlign: TextAlign.center,
                   ),
@@ -265,17 +164,35 @@ class _StatsPageState extends State<StatsPage> {
               )
             else
               Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: stats.recentDomains.map((entry) {
+                children: stats.recentDomains.take(10).map((entry) {
+                  final category = _mapCategory(entry.category);
                   return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.public, size: 20),
-                      title: Text(entry.domain),
-                      subtitle: Text(_formatTimestamp(entry.timestamp)),
-                      dense: true,
-                      visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.public, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            entry.domain,
+                            style: textTheme.bodyLarge,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            category,
+                            style: textTheme.labelMedium?.copyWith(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        )
+                      ],
                     ),
                   );
                 }).toList(),
@@ -286,47 +203,71 @@ class _StatsPageState extends State<StatsPage> {
     );
   }
 
-  String _modeLabel(ProtectionMode mode) {
-    switch (mode) {
-      case ProtectionMode.standard:
-        return AppStrings.modes.standard;
-      case ProtectionMode.advanced:
-        return AppStrings.modes.strict;
-      case ProtectionMode.ultra:
-        return AppStrings.modes.ultra;
+  String _mapCategory(String? raw) {
+    switch (raw?.toLowerCase()) {
+      case 'nsfw':
+        return 'NSFW';
+      case 'time_waster':
+      case 'focus':
+        return AppStrings.home.focusTitle;
+      case 'ads':
+        return 'Ads';
+      case 'analytics':
+        return 'Analytics';
+      default:
+        return '—';
     }
+  }
+
+  List<String> _activeModes() {
+    final modes = <String>[];
+    if (widget.controller.nsfwEnabled) {
+      modes.add(AppStrings.home.nsfwTitle);
+    }
+    if (widget.controller.focusEnabled) {
+      modes.add(AppStrings.home.focusTitle);
+    }
+    return modes;
   }
 }
 
-class _StrictModeBanner extends StatelessWidget {
-  const _StrictModeBanner({required this.message});
+class _StatRow extends StatelessWidget {
+  const _StatRow({required this.label, required this.value});
 
-  final String message;
+  final String label;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.amber.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.amber.shade200),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.warning_amber_rounded, color: Colors.amber.shade800, size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: textTheme.bodySmall
-                  ?.copyWith(color: Colors.amber.shade800, fontWeight: FontWeight.w700),
-            ),
+    final colorScheme = Theme.of(context).colorScheme;
+    if (value.isEmpty) {
+      return Text(
+        label,
+        style: textTheme.bodyLarge?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w700,
+        ),
+      );
+    }
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: textTheme.bodyLarge?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
           ),
-        ],
-      ),
+        ),
+        Text(
+          value,
+          style: textTheme.titleMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
     );
   }
 }
