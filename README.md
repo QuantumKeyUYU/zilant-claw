@@ -1,12 +1,15 @@
-# Digital Defender
+# StillNet
 
-MVP скелет приложения Digital Defender: единый экран с драконом и тумблером, Android VPN-защита и Windows-заглушка.
+StillNet — минималистичный интернет-фильтр и фокус-ассистент. Локальный VPN глушит рекламу, трекеры и подозрительные домены и
+показывает, насколько шумным был ваш день. security engine · Zilant Prime.
 
 ## Сборка
 
 - Flutter: проект настроен для Android и Windows. Укажите путь к Flutter SDK в `android/local.properties` и `windows/flutter/generated_config.cmake` при сборке.
 - Android: VPN-сервис `DigitalDefenderVpnService` поднимает локальный VpnService и перехватывает DNS-запросы, блокируя домены из `assets/blocklists/android_basic.txt`.
 - Windows: метод-канал логирует включение/выключение защиты (заглушка).
+
+Network filtering and DNS engine: Zilant Prime (internal core).
 
 ## Структура
 - `lib/` — Flutter UI и контроллер состояния.

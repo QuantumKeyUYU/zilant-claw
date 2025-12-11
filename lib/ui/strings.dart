@@ -14,8 +14,8 @@ class AppStrings {
 class CommonStrings {
   const CommonStrings();
 
-  final String title = 'Digital Defender';
-  final String poweredBy = 'Powered by Zilant Core';
+  final String title = 'StillNet';
+  final String poweredBy = 'security engine · Zilant Prime';
   final String protectionInfoLink = 'Как работает защита?';
   final String openPrivacyGuide = 'Гид по приватности';
 }
@@ -44,6 +44,9 @@ class HomeStrings {
       'Фильтр временно ослаблен — DNS не отвечает, чтобы не ломать интернет мы пропускаем трафик без блокировки.';
   final String reconnectingSoon = 'повтор через несколько секунд';
   final String permissionRequired = 'Разрешите VPN-подключение, чтобы включить защиту';
+  final String todayCardTitle = 'Сегодняшняя активность';
+  final String todayTrafficSummary = 'Сегодня: %s запросов, %s заблокировано (%s%%)';
+  final String todayTrafficSilent = 'Пока тишина: запросов не было.';
 }
 
 class ModeStrings {
@@ -107,9 +110,9 @@ class ProtectionInfoStrings {
 
   final String title = 'Как это работает и как мы защищаем';
   final String intro =
-      'Фильтрация трафика происходит локально на устройстве через VPN-службу. Ваш трафик не отправляется на наши сервера.';
+      'StillNet — локальный VPN на устройстве, который глушит цифровой шум: реклама, навязчивые трекеры и подозрительные запросы. Интернет остаётся быстрым, а внимание — сфокусированным.';
   final String blocklist =
-      'Мы блокируем домены из встроенного списка (реклама, трекеры, потенциально вредоносные сайты).';
+      'Мы блокируем домены из встроенного списка (реклама, трекеры, потенциально вредоносные сайты) — всё происходит на устройстве без отправки данных наружу.';
   final String modeStandard = 'Стандарт — сбалансированный режим для ежедневного использования.';
   final String modeStrict =
       'Продвинутый — максимально агрессивный режим: может ломать отдельные сайты и приложения.';
